@@ -44,7 +44,6 @@ class CmosReducer:
         if result.payload:
             self.publish["hits"][result.event_number] = result.payload
             if self.dset:
-                logger.info("write dataset to file %s", result.payload)
                 nhits = result.payload["offsets"].shape[0]
                 oldsize = self.dset.shape[0]
                 self.dset.resize(oldsize + nhits, axis=0)
@@ -52,7 +51,7 @@ class CmosReducer:
 
                 self.dset[oldsize:oldsize+nhits,:,:] = result.payload["spots"]
                 self.offsetdset[oldsize:oldsize+nhits,:] = result.payload["offsets"]
-                logger.info("written record")
+                logger.debug("written record")
 
     def finish(self, parameters=None):
         logger.info("finished reducer custom")
