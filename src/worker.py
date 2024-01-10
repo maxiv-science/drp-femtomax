@@ -29,7 +29,7 @@ class CmosWorker:
         bg = int(parameters["background"].data)
         thr = int(parameters["threshold"].data)
         size = int(parameters["spot_size"].data)
-        dat = parse(event.streams["balor"])
+        dat = parse(event.streams["andor3_balor"])
         print(dat)
         dark_corr = dat.data.clip(min=bg) - bg
         frame = dat.frame

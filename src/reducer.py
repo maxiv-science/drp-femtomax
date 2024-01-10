@@ -14,7 +14,10 @@ class CmosReducer:
 
     def __init__(self, parameters=None):
         self.publish = {"hits": {}}
-        filename = parameters["filename"].data
+        try:
+            filename = parameters["filename"].data
+        except:
+            filename = None
         size = int(parameters["spot_size"].data)
         print(filename)
         if filename:
