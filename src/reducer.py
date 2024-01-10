@@ -55,6 +55,6 @@ class CmosReducer:
                 logger.info("written record")
 
     def finish(self, parameters=None):
-        logger.info("finished reducer")
+        logger.info("finished reducer custom")
         if self._fh:
             self._fh.close()
