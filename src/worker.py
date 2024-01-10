@@ -4,6 +4,7 @@ import tempfile
 from dranspose.event import EventData
 from dranspose.parameters import IntParameter, FileParameter
 from dranspose.middlewares.stream1 import parse
+from dranspose.data.stream1 import Stream1Data
 import numpy as np
 from numpy import unravel_index
 
@@ -30,10 +31,11 @@ class CmosWorker:
         thr = int(parameters["threshold"].data)
         size = int(parameters["spot_size"].data)
         dat = parse(event.streams["andor3_balor"])
-        print(dat)
+        if not isinstance(dat, Stream1Data):
+            return
         dark_corr = dat.data.clip(min=bg) - bg
         frame = dat.frame
-        print("frameno", frame)
+        logger.debug("frameno %d", frame)
         positions = np.asarray(dark_corr > thr).nonzero()
         hits = set()
         for x, y in zip(*positions):
@@ -41,6 +43,7 @@ class CmosWorker:
             maxpos = unravel_index(small.argmax(), small.shape)
             hits.add((x + maxpos[0] - 1, y + maxpos[1] - 1))
 
+        logger.debug("found %d hits", len(hits))
         spots = np.zeros((len(hits), size,size))
         pad = int(np.ceil(size/2))
         padded = np.pad(dark_corr, pad)

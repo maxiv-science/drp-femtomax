@@ -1,8 +1,12 @@
+import logging
+
 from dranspose.event import ResultData
 from dranspose.parameters import StrParameter
 import os
 import h5py
 import numpy as np
+
+logger = logging.getLogger(__name__)
 
 class CmosReducer:
     @staticmethod
@@ -19,7 +23,8 @@ class CmosReducer:
         except:
             filename = None
         size = int(parameters["spot_size"].data)
-        print(filename)
+        logger.info("writing to file %s", filename)
+        self.dset = None
         if filename:
             if os.path.isfile(filename):
                 self._fh = h5py.File(filename, 'a')
@@ -31,6 +36,7 @@ class CmosReducer:
                 self.offsetdset = group.create_dataset("offset", (0,3), maxshape=(None,3), dtype=np.int16)
                 self.dset = group.create_dataset("data", (0,size, size), maxshape=(None,size, size), dtype=np.uint16)
                 self._offset_dset_name = f"sparse/offset"
+            logger.info("opened file at %s", self._fh)
         else:
             self._fh = None
 
@@ -38,6 +44,7 @@ class CmosReducer:
         if result.payload:
             self.publish["hits"][result.event_number] = result.payload
             if self.dset:
+                logger.debug("write dataset to file")
                 nhits = result.payload["offsets"].shape[0]
                 oldsize = self.dset.shape[0]
                 self.dset.resize(oldsize + nhits, axis=0)
@@ -47,7 +54,6 @@ class CmosReducer:
                 self.offsetdset[oldsize:oldsize+nhits,:] = result.payload["offsets"]
 
     def finish(self, parameters=None):
-        print("finished reducer")
+        logger.info("finished reducer")
         if self._fh:
             self._fh.close()
-        #print(self.publish)
