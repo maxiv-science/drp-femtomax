@@ -22,7 +22,7 @@ class CmosWorker:
         ]
         return params
 
-    def __init__(self, parameters=None):
+    def __init__(self, **kwargs):
         self.number = 0
 
     def process_event(self, event: EventData, parameters=None):
