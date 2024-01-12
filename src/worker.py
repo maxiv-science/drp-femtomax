@@ -20,6 +20,10 @@ class CmosWorker:
             IntParameter(name="threshold"),
             IntParameter(name="spot_size"),
             StrParameter(name="analysis_mode", default="roi"),
+            IntParameter(name="crop_x0", default=0),
+            IntParameter(name="crop_y0", default=0),
+            IntParameter(name="crop_x1", default=100),
+            IntParameter(name="crop_y1", default=100),
         ]
         return params
 
@@ -34,7 +38,19 @@ class CmosWorker:
                 bg = parameters["background"].value
                 if not isinstance(dat, Stream1Data):
                     return
-                return {"img": dat.data.clip(min=bg) - bg , "cropped": None}
+
+
+                x0 = parameters["crop_x0"].value
+                y0 = parameters["crop_y0"].value
+                x1 = parameters["crop_x1"].value
+                y1 = parameters["crop_y1"].value
+                xslice = slice(min(x0, x1), max(x0, x1))
+                yslice = slice(min(y0, y1), max(y0, y1))
+                dark_corr = dat.data.clip(min=bg) - bg
+                crop = dark_corr[yslice, xslice]
+                scalar = crop.mean()
+
+                return {"img": dark_corr , "cropped": None, "roi_mean": scalar}
 
         elif parameters["analysis_mode"].data == b"sparsification":
             logger.debug("using parameters %s", parameters)

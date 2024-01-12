@@ -27,7 +27,7 @@ class CmosReducer:
             analysis_mode = "roi"
 
         if analysis_mode == "roi":
-            self.publish = {"last": np.zeros((100,100)), "cropped": None, "nint": 0}
+            self.publish = {"last": np.zeros((100,100)), "cropped": None, "nint": 0, "roi_means":{}}
         elif analysis_mode == "sparsification":
             self.publish = {"hits": {}}
             try:
@@ -61,6 +61,7 @@ class CmosReducer:
             if result.payload:
                 img = result.payload["img"]
                 cropped = result.payload["cropped"]
+                mean = result.payload["roi_mean"]
                 if parameters["integrate"].value:
                     if self.publish["last"].shape != img.shape or cropped != self.publish["cropped"]:
                         self.publish["last"] = img
@@ -72,6 +73,7 @@ class CmosReducer:
                     self.publish["last"] = img
                     self.publish["nint"] = 1
                 self.publish["cropped"] = cropped
+                self.publish["roi_means"][result.event_number] = mean
 
         elif analysis_mode == "sparsification":
             if result.payload:
