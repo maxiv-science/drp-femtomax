@@ -26,6 +26,7 @@ class CmosWorker:
         self.number = 0
 
     def process_event(self, event: EventData, parameters=None):
+        print("got event", event)
         logger.debug("using parameters %s", parameters)
         bg = int(parameters["background"].data)
         thr = int(parameters["threshold"].data)
