@@ -19,9 +19,10 @@ class CmosReducer:
 
     def __init__(self, parameters=None, **kwargs):
         self._fh = None
+        self.publish = {}
 
         if "analysis_mode" in parameters:
-            analysis_mode = parameters["analysis_mode"].data
+            analysis_mode = parameters["analysis_mode"].value
         else:
             analysis_mode = "roi"
 
@@ -30,10 +31,10 @@ class CmosReducer:
         elif analysis_mode == "sparsification":
             self.publish = {"hits": {}}
             try:
-                filename = parameters["filename"].data
+                filename = parameters["filename"].value
             except:
                 filename = None
-            size = int(parameters["spot_size"].data)
+            size = parameters["spot_size"].value
             logger.info("writing to file %s", filename)
             self.dset = None
             if filename:
@@ -52,7 +53,7 @@ class CmosReducer:
 
     def process_result(self, result: ResultData, parameters=None):
         if "analysis_mode" in parameters:
-            analysis_mode = parameters["analysis_mode"].data
+            analysis_mode = parameters["analysis_mode"].value
         else:
             analysis_mode = "roi"
 
