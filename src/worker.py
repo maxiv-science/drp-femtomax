@@ -33,8 +33,13 @@ class CmosWorker:
     def process_event(self, event: EventData, parameters=None):
 
         if parameters["analysis_mode"].value == "roi":
+            dat = None
             if "andor3_balor" in event.streams:
                 dat = parse(event.streams["andor3_balor"])
+            elif "andor3_zyla10" in event.streams:
+                dat = parse(event.streams["andor3_zyla10"])
+
+            if dat:
                 bg = parameters["background"].value
                 if not isinstance(dat, Stream1Data):
                     return
