@@ -18,9 +18,16 @@ class CmosReducer:
         return params
 
     def __init__(self, parameters=None, **kwargs):
-        if parameters["analysis_mode"].data == b"roi":
+        self._fh = None
+
+        if "analysis_mode" in parameters:
+            analysis_mode = parameters["analysis_mode"].data
+        else:
+            analysis_mode = "roi"
+
+        if analysis_mode == "roi":
             self.publish = {"last": np.zeros((100,100)), "cropped": None, "nint": 0}
-        elif parameters["analysis_mode"].data == b"sparsification":
+        elif analysis_mode == "sparsification":
             self.publish = {"hits": {}}
             try:
                 filename = parameters["filename"].data
@@ -41,11 +48,15 @@ class CmosReducer:
                     self.dset = group.create_dataset("data", (0,size, size), maxshape=(None,size, size), dtype=np.uint16)
                     self._offset_dset_name = f"sparse/offset"
                 logger.info("opened file at %s", self._fh)
-            else:
-                self._fh = None
+
 
     def process_result(self, result: ResultData, parameters=None):
-        if parameters["analysis_mode"].value == "roi":
+        if "analysis_mode" in parameters:
+            analysis_mode = parameters["analysis_mode"].data
+        else:
+            analysis_mode = "roi"
+
+        if analysis_mode == "roi":
             if result.payload:
                 img = result.payload["img"]
                 cropped = result.payload["cropped"]
@@ -61,7 +72,7 @@ class CmosReducer:
                     self.publish["nint"] = 1
                 self.publish["cropped"] = cropped
 
-        elif parameters["analysis_mode"].data == b"sparsification":
+        elif analysis_mode == "sparsification":
             if result.payload:
                 self.publish["hits"][result.event_number] = result.payload
                 if self.dset:

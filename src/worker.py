@@ -16,7 +16,7 @@ class CmosWorker:
     @staticmethod
     def describe_parameters():
         params = [
-            IntParameter(name="background"),
+            IntParameter(name="background", default=0),
             IntParameter(name="threshold"),
             IntParameter(name="spot_size"),
             StrParameter(name="analysis_mode", default="roi"),
