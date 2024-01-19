@@ -1,5 +1,6 @@
 import logging
 import tempfile
+import json
 
 from dranspose.event import EventData
 from dranspose.parameters import IntParameter, StrParameter
@@ -24,6 +25,7 @@ class CmosWorker:
             IntParameter(name="crop_y0", default=0),
             IntParameter(name="crop_x1", default=100),
             IntParameter(name="crop_y1", default=100),
+            StrParameter(name="rois", default=""),
         ]
         return params
 
@@ -44,7 +46,6 @@ class CmosWorker:
                 if not isinstance(dat, Stream1Data):
                     return
 
-
                 x0 = parameters["crop_x0"].value
                 y0 = parameters["crop_y0"].value
                 x1 = parameters["crop_x1"].value
@@ -54,6 +55,12 @@ class CmosWorker:
                 dark_corr = dat.data.clip(min=bg) - bg
                 crop = dark_corr[yslice, xslice]
                 scalar = crop.mean()
+
+                try:
+                    rois = json.loads(parameters["rois"].value)
+                    logger.debug("got rois", rois)
+                except:
+                    pass
 
                 return {"img": dark_corr , "cropped": None, "roi_mean": scalar}
 
