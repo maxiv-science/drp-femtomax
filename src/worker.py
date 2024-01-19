@@ -46,23 +46,24 @@ class CmosWorker:
                 if not isinstance(dat, Stream1Data):
                     return
 
-                x0 = parameters["crop_x0"].value
-                y0 = parameters["crop_y0"].value
-                x1 = parameters["crop_x1"].value
-                y1 = parameters["crop_y1"].value
-                xslice = slice(min(x0, x1), max(x0, x1))
-                yslice = slice(min(y0, y1), max(y0, y1))
                 dark_corr = dat.data.clip(min=bg) - bg
-                crop = dark_corr[yslice, xslice]
-                scalar = crop.mean()
-
+                means = {}
                 try:
                     rois = json.loads(parameters["rois"].value)
-                    logger.debug("got rois", rois)
+                    for rn, rd in rois.items():
+                        tl = rd["handles"]["_handleBottomLeft"]
+                        br = rd["handles"]["_handleTopRight"]
+
+                        xslice = slice(min(int(tl[0]), int(br[0])), max(int(tl[0]), int(br[0])))
+                        yslice = slice(min(int(tl[1]), int(br[1])), max(int(tl[1]), int(br[1])))
+
+                        crop = dark_corr[yslice, xslice]
+                        scalar = crop.mean()
+                        means[rn] = scalar
                 except:
                     pass
 
-                return {"img": dark_corr , "cropped": None, "roi_mean": scalar}
+                return {"img": dark_corr , "cropped": None, "roi_means": means}
 
         elif parameters["analysis_mode"].data == b"sparsification":
             logger.debug("using parameters %s", parameters)

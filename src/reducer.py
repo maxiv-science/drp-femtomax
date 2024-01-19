@@ -61,7 +61,7 @@ class CmosReducer:
             if result.payload:
                 img = result.payload["img"]
                 cropped = result.payload["cropped"]
-                mean = result.payload["roi_mean"]
+                mean = result.payload["roi_means"]
                 if parameters["integrate"].value:
                     if self.publish["last"].shape != img.shape or cropped != self.publish["cropped"]:
                         self.publish["last"] = img
