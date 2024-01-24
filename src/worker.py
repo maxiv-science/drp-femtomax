@@ -5,6 +5,7 @@ import json
 from dranspose.event import EventData
 from dranspose.parameters import IntParameter, StrParameter
 from dranspose.middlewares.stream1 import parse
+from dranspose.middlewares.sardana import parse as sardana_parse
 from dranspose.data.stream1 import Stream1Data
 import numpy as np
 from numpy import unravel_index
@@ -33,6 +34,9 @@ class CmosWorker:
         self.number = 0
 
     def process_event(self, event: EventData, parameters=None):
+        sardana = None
+        if "sardana" in event.streams:
+            sardana = sardana_parse(event.streams["sardana"])
 
         if parameters["analysis_mode"].value == "roi":
             dat = None
@@ -44,7 +48,7 @@ class CmosWorker:
             if dat:
                 bg = parameters["background"].value
                 if not isinstance(dat, Stream1Data):
-                    return
+                    return {"sardana": sardana}
 
                 dark_corr = dat.data.clip(min=bg) - bg
                 means = {}
@@ -63,7 +67,7 @@ class CmosWorker:
                 except:
                     pass
 
-                return {"img": dark_corr , "cropped": None, "roi_means": means}
+                return {"img": dark_corr , "cropped": None, "roi_means": means, "sardana": sardana}
 
         elif parameters["analysis_mode"].data == b"sparsification":
             logger.debug("using parameters %s", parameters)

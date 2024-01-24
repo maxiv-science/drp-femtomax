@@ -57,6 +57,7 @@ class CmosReducer:
                     self._offset_dset_name = f"sparse/offset"
                 logger.info("opened file at %s", self._fh)
 
+        self.publish["sardana"] = {}
 
     def process_result(self, result: ResultData, parameters=None):
         if "analysis_mode" in parameters:
@@ -64,8 +65,12 @@ class CmosReducer:
         else:
             analysis_mode = "roi"
 
+        if "sardana" in result.payload:
+            if result.payload["sardana"] is not None:
+                self.publish["sardana"][result.event_number] = result.payload["sardana"]
+
         if analysis_mode == "roi":
-            if result.payload:
+            if "img" in result.payload:
                 img = result.payload["img"]
                 cropped = result.payload["cropped"]
                 mean = result.payload["roi_means"]
