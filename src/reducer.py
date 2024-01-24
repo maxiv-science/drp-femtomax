@@ -1,10 +1,12 @@
 import logging
+from pathlib import Path
 
 from dranspose.event import ResultData
 from dranspose.parameters import StrParameter, BoolParameter
 import os
 import h5py
 import numpy as np
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -13,6 +15,8 @@ class CmosReducer:
     def describe_parameters():
         params = [
             StrParameter(name="filename"),
+            BoolParameter(name="pileup"),
+            StrParameter(name="scandir"),
             BoolParameter(name="integrate"),
         ]
         return params
@@ -28,6 +32,9 @@ class CmosReducer:
 
         if analysis_mode == "roi":
             self.publish = {"last": np.zeros((100,100)), "cropped": None, "nint": 0, "roi_means":{}}
+            self.allsum = None
+            self.nimg = None
+
         elif analysis_mode == "sparsification":
             self.publish = {"hits": {}}
             try:
@@ -75,6 +82,13 @@ class CmosReducer:
                 self.publish["cropped"] = cropped
                 self.publish["roi_means"][result.event_number] = mean
 
+                if self.allsum is None:
+                    self.allsum = img
+                    self.nimg = 1
+                else:
+                    self.allsum = self.allsum + img
+                    self.nimg += 1
+
         elif analysis_mode == "sparsification":
             if result.payload:
                 self.publish["hits"][result.event_number] = result.payload
@@ -91,5 +105,27 @@ class CmosReducer:
     def finish(self, parameters=None):
         print(self.publish)
         logger.info("finished reducer custom")
+        print(self.allsum)
+        if self.allsum is not None:
+            try:
+                scandir = parameters["scandir"].value
+                pileup = parameters["pileup"].value
+            except Exception as e:
+                print(e.__repr__())
+                scandir = None
+                pileup=False
+            print("sumup to ", scandir, pileup, parameters["pileup"].data)
+            if pileup:
+                Path(scandir).mkdir(parents=True, exist_ok=True)
+                filename= f"{scandir}/pileup.h5"
+                if os.path.isfile(filename):
+                    logger.error("file exists already, adding time suffix")
+                    filename+=datetime.now().isoformat()+".h5"
+                print("opening file", Path(filename))
+                self._fh = h5py.File(filename, 'w')
+                group = self._fh.create_group("pileup")
+                print("group is", group)
+                self.nimagesdset = group.create_dataset("nimages", data=self.nimg)
+                self.dset = group.create_dataset("data", data=self.allsum)
         if self._fh:
             self._fh.close()
