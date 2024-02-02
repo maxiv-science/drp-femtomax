@@ -44,6 +44,8 @@ class CmosWorker:
                 dat = parse(event.streams["andor3_balor"])
             elif "andor3_zyla10" in event.streams:
                 dat = parse(event.streams["andor3_zyla10"])
+            elif "pilatus" in event.streams:
+                dat = parse(event.streams["pilatus"])
 
             if dat:
                 bg = parameters["background"].value

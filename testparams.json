@@ -1,5 +1,5 @@
 [{"name": "spot_size", "data": "7"},
-{"name": "background", "data": "100"},
+{"name": "background", "data": "0"},
 {"name": "threshold", "data": "20"},
 {"name":  "analysis_mode", "data":  "roi"},
 {"name": "integrate", "data": "True"},
