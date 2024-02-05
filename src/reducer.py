@@ -24,6 +24,9 @@ class CmosReducer:
     def __init__(self, parameters=None, **kwargs):
         self._fh = None
         self.publish = {}
+        self.allsum = None
+        self.nimg = None
+        self.pileup_filename = None
 
         if "analysis_mode" in parameters:
             analysis_mode = parameters["analysis_mode"].value
@@ -32,8 +35,7 @@ class CmosReducer:
 
         if analysis_mode == "roi":
             self.publish = {"last": np.zeros((100,100)), "cropped": None, "nint": 0, "roi_means":{}}
-            self.allsum = None
-            self.nimg = None
+
 
         elif analysis_mode == "sparsification":
             self.publish = {"hits": {}}
@@ -60,6 +62,9 @@ class CmosReducer:
         self.publish["sardana"] = {}
 
     def process_result(self, result: ResultData, parameters=None):
+        if result.payload is None:
+            return
+
         if "analysis_mode" in parameters:
             analysis_mode = parameters["analysis_mode"].value
         else:
@@ -68,6 +73,9 @@ class CmosReducer:
         if "sardana" in result.payload:
             if result.payload["sardana"] is not None:
                 self.publish["sardana"][result.event_number] = result.payload["sardana"]
+
+        if "pileup_filename" in result.payload:
+            self.pileup_filename = result.payload["pileup_filename"]
 
         if analysis_mode == "roi":
             if "img" in result.payload:
@@ -113,16 +121,17 @@ class CmosReducer:
         print(self.allsum)
         if self.allsum is not None:
             try:
-                scandir = parameters["scandir"].value
                 pileup = parameters["pileup"].value
             except Exception as e:
                 print(e.__repr__())
-                scandir = None
                 pileup=False
-            print("sumup to ", scandir, pileup, parameters["pileup"].data)
-            if pileup:
-                Path(scandir).mkdir(parents=True, exist_ok=True)
-                filename= f"{scandir}/pileup.h5"
+            print("sumup to ", self.pileup_filename, pileup, parameters["pileup"].data)
+            if pileup and self.pileup_filename:
+                if self.pileup_filename.endswith(".h5"):
+                    filename = self.pileup_filename[:-3] + "_pileup.h5"
+                else:
+                    filename = self.pileup_filename + "_pileup.h5"
+
                 if os.path.isfile(filename):
                     logger.error("file exists already, adding time suffix")
                     filename+=datetime.now().isoformat()+".h5"

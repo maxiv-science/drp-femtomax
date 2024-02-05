@@ -6,7 +6,7 @@ from dranspose.event import EventData
 from dranspose.parameters import IntParameter, StrParameter
 from dranspose.middlewares.stream1 import parse
 from dranspose.middlewares.sardana import parse as sardana_parse
-from dranspose.data.stream1 import Stream1Data
+from dranspose.data.stream1 import Stream1Data, Stream1Start
 import numpy as np
 from numpy import unravel_index
 
@@ -47,8 +47,12 @@ class CmosWorker:
             elif "pilatus" in event.streams:
                 dat = parse(event.streams["pilatus"])
 
+            print("dat is", dat)
             if dat:
                 bg = parameters["background"].value
+                if isinstance(dat, Stream1Start):
+                    print("start message", dat)
+                    return {"sardana": sardana, "pileup_filename": dat.filename}
                 if not isinstance(dat, Stream1Data):
                     return {"sardana": sardana}
 
