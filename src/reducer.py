@@ -72,7 +72,7 @@ class CmosReducer:
 
         if "sardana" in result.payload:
             if result.payload["sardana"] is not None:
-                self.publish["sardana"][result.event_number] = result.payload["sardana"]
+                self.publish["sardana"][result.event_number] = result.payload["sardana"].__dict__
 
         if "pileup_filename" in result.payload:
             self.pileup_filename = result.payload["pileup_filename"]

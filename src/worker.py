@@ -22,10 +22,6 @@ class CmosWorker:
             IntParameter(name="threshold"),
             IntParameter(name="spot_size"),
             StrParameter(name="analysis_mode", default="roi"),
-            IntParameter(name="crop_x0", default=0),
-            IntParameter(name="crop_y0", default=0),
-            IntParameter(name="crop_x1", default=100),
-            IntParameter(name="crop_y1", default=100),
             StrParameter(name="rois", default=""),
         ]
         return params
@@ -47,7 +43,6 @@ class CmosWorker:
             elif "pilatus" in event.streams:
                 dat = parse(event.streams["pilatus"])
 
-            print("dat is", dat)
             if dat:
                 bg = parameters["background"].value
                 if isinstance(dat, Stream1Start):
