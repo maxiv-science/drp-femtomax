@@ -21,7 +21,7 @@ class CmosReducer:
         ]
         return params
 
-    def __init__(self, parameters=None, **kwargs):
+    def __init__(self, parameters=None,  context=None,**kwargs):
         self._fh = None
         self.publish = {}
         self.allsum = None
@@ -33,8 +33,13 @@ class CmosReducer:
         else:
             analysis_mode = "roi"
 
+        self.context = context
         if analysis_mode == "roi":
-            self.publish = {"last": np.zeros((100,100)), "cropped": None, "nint": 0, "roi_means":{}}
+            if "last" in context:
+                last = context["last"]
+            else:
+                last = np.zeros((100,100))
+            self.publish = {"last": last, "cropped": None, "nint": 0, "roi_means":{}}
 
 
         elif analysis_mode == "sparsification":
@@ -72,7 +77,7 @@ class CmosReducer:
 
         if "sardana" in result.payload:
             if result.payload["sardana"] is not None:
-                self.publish["sardana"][result.event_number] = result.payload["sardana"].__dict__
+                self.publish["sardana"][result.event_number] = result.payload["sardana"].model_dump()
 
         if "pileup_filename" in result.payload:
             self.pileup_filename = result.payload["pileup_filename"]
@@ -85,12 +90,15 @@ class CmosReducer:
                 if parameters["integrate"].value:
                     if self.publish["last"].shape != img.shape or cropped != self.publish["cropped"]:
                         self.publish["last"] = img
+                        self.context["last"] = img
                         self.publish["nint"] = 1
                     else:
                         self.publish["last"] = self.publish["last"] + img
+                        self.context["last"] = self.publish["last"]
                         self.publish["nint"] += 1
                 else:
                     self.publish["last"] = img
+                    self.context["last"] = img
                     self.publish["nint"] = 1
                 self.publish["cropped"] = cropped
                 self.publish["roi_means"][result.event_number] = mean
