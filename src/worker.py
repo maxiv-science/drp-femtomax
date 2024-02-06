@@ -30,9 +30,9 @@ class CmosWorker:
         self.number = 0
 
     def process_event(self, event: EventData, parameters=None):
-        sardana = None
+        ret = {}
         if "sardana" in event.streams:
-            sardana = sardana_parse(event.streams["sardana"])
+            ret["sardana"] = sardana_parse(event.streams["sardana"])
 
         if parameters["analysis_mode"].value == "roi":
             dat = None
@@ -47,9 +47,9 @@ class CmosWorker:
                 bg = parameters["background"].value
                 if isinstance(dat, Stream1Start):
                     print("start message", dat)
-                    return {"sardana": sardana, "pileup_filename": dat.filename}
+                    return {**ret, "pileup_filename": dat.filename}
                 if not isinstance(dat, Stream1Data):
-                    return {"sardana": sardana}
+                    return ret
 
                 dark_corr = dat.data.clip(min=bg) - bg
                 means = {}
@@ -68,7 +68,7 @@ class CmosWorker:
                 except:
                     pass
 
-                return {"img": dark_corr , "cropped": None, "roi_means": means, "sardana": sardana}
+                return {"img": dark_corr , "cropped": None, "roi_means": means, **ret}
 
         elif parameters["analysis_mode"].data == b"sparsification":
             logger.debug("using parameters %s", parameters)
@@ -77,7 +77,7 @@ class CmosWorker:
             size = int(parameters["spot_size"].data)
             dat = parse(event.streams["andor3_balor"])
             if not isinstance(dat, Stream1Data):
-                return
+                return ret
             dark_corr = dat.data.clip(min=bg) - bg
             pad = int(np.ceil(size / 2))
             padded = np.pad(dark_corr, pad)
@@ -98,7 +98,8 @@ class CmosWorker:
                 spot = padded[pad + x - 3:pad + x + 4, pad + y - 3:pad + y + 4]
                 spots[i] = spot
                 offsets[i] = [frame, x - 3, y - 3]
-            return {"spots": spots, "offsets": offsets}
+            return {**ret, "spots": spots, "offsets": offsets}
+        return ret
 
     def finish(self, parameters=None):
         print("finished")
