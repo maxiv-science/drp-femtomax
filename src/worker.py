@@ -3,12 +3,13 @@ import tempfile
 import json
 
 from dranspose.event import EventData
-from dranspose.parameters import IntParameter, StrParameter
+from dranspose.parameters import IntParameter, StrParameter, BoolParameter
 from dranspose.middlewares.stream1 import parse
 from dranspose.middlewares.sardana import parse as sardana_parse
 from dranspose.data.stream1 import Stream1Data, Stream1Start
 import numpy as np
 from numpy import unravel_index
+from scipy.ndimage import gaussian_filter
 
 logger = logging.getLogger(__name__)
 
@@ -19,10 +20,12 @@ class CmosWorker:
     def describe_parameters():
         params = [
             IntParameter(name="background", default=0),
-            IntParameter(name="threshold"),
-            IntParameter(name="spot_size"),
+            IntParameter(name="threshold", default=12),
+            IntParameter(name="sigma", default=4),
+            IntParameter(name="spot_size", default=7),
+            BoolParameter(name="blur", default=False),
             StrParameter(name="analysis_mode", default="roi"),
-            StrParameter(name="rois", default=""),
+            StrParameter(name="rois", default="{}"),
         ]
         return params
 
@@ -52,6 +55,14 @@ class CmosWorker:
                     return ret
 
                 dark_corr = dat.data.clip(min=bg) - bg
+
+                blur = parameters["blur"].value
+                thr = parameters["threshold"].value
+                sigma = parameters["sigma"].value
+                if blur:
+                    dark_corr[dark_corr < thr] = 0  # 12
+                    dark_corr = gaussian_filter(dark_corr, sigma=sigma)
+
                 means = {}
                 try:
                     rois = json.loads(parameters["rois"].value)
@@ -70,12 +81,18 @@ class CmosWorker:
 
                 return {"img": dark_corr , "cropped": None, "roi_means": means, **ret}
 
+
         elif parameters["analysis_mode"].data == b"sparsification":
             logger.debug("using parameters %s", parameters)
             bg = int(parameters["background"].data)
             thr = int(parameters["threshold"].data)
             size = int(parameters["spot_size"].data)
-            dat = parse(event.streams["andor3_balor"])
+            dat = None
+            if "andor3_balor" in event.streams:
+                dat = parse(event.streams["andor3_balor"])
+            elif "andor3_zyla10" in event.streams:
+                dat = parse(event.streams["andor3_zyla10"])
+
             if not isinstance(dat, Stream1Data):
                 return ret
             dark_corr = dat.data.clip(min=bg) - bg
