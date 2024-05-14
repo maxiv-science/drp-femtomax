@@ -93,7 +93,7 @@ class CmosReducer:
                 parts = self.cog_filename.split(".")
                 fn = f"{'.'.join(parts[:-1])}_photoncount.{parts[-1]}"
                 logger.info("write to %s", fn)
-                fn = "./testoutput.h5"
+                #fn = "./testoutput.h5"
                 self._fh = h5py.File(fn, 'w')
                 group = self._fh.create_group("hits")
                 threshold_counting = parameters["threshold_counting"].value
