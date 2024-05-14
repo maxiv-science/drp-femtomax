@@ -139,30 +139,26 @@ class CmosWorker:
             return {**ret, "spots": spots, "offsets": offsets}
 
         elif parameters["analysis_mode"].value == "cog":
-            print("bla")
             logger.debug("cog using parameters %s", parameters)
             threshold_counting = parameters["threshold_counting"].value
             pre_threshold = parameters["pre_threshold"].value
-            print("vals", threshold_counting, pre_threshold)
+            bg = parameters["background"].value
+
             dat = None
             if "andor3_balor" in event.streams:
                 dat = parse(event.streams["andor3_balor"])
             elif "andor3_zyla10" in event.streams:
                 dat = parse(event.streams["andor3_zyla10"])
 
-            print(dat)
             if isinstance(dat, Stream1Start):
-                print("using filename", dat.filename)
                 return {**ret, "cog_filename": dat.filename}
 
             if isinstance(dat, Stream1End):
-                print("send off accumulated image")
                 return {**ret, "reconstructed": self.cumu}
 
             if not isinstance(dat, Stream1Data):
                 return ret
 
-            print("there is data")
 
             frame = dat.frame
             logger.debug("frameno %d", frame)
@@ -187,8 +183,8 @@ class CmosWorker:
                     #print(hits)
             except:
                 pass
-
-            return {**ret, "hits": hits, "frame": dat.frame}
+            dark_corr = dat.data.clip(min=bg) - bg
+            return {**ret, "hits": hits, "frame": dat.frame, "img": dark_corr}
         return ret
 
     def finish(self, parameters=None):

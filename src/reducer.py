@@ -116,35 +116,35 @@ class CmosReducer:
                 self._fh["raw_data"] = h5py.ExternalLink(self.cog_filename, "/")
 
 
-        if analysis_mode == "roi":
-            if "img" in result.payload:
-                img = result.payload["img"]
-                cropped = result.payload["cropped"]
-                mean = result.payload["roi_means"]
-                if parameters["integrate"].value:
-                    if self.publish["last"].shape != img.shape or cropped != self.publish["cropped"]:
-                        self.publish["last"] = img
-                        self.context["last"] = img
-                        self.publish["nint"] = 1
-                    else:
-                        self.publish["last"] = self.publish["last"] + img
-                        self.context["last"] = self.publish["last"]
-                        self.publish["nint"] += 1
-                else:
+        #if analysis_mode == "roi":
+        if "img" in result.payload:
+            img = result.payload["img"]
+
+            if parameters["integrate"].value:
+                if self.publish["last"].shape != img.shape:
                     self.publish["last"] = img
                     self.context["last"] = img
                     self.publish["nint"] = 1
-                self.publish["cropped"] = cropped
+                else:
+                    self.publish["last"] = self.publish["last"] + img
+                    self.context["last"] = self.publish["last"]
+                    self.publish["nint"] += 1
+            else:
+                self.publish["last"] = img
+                self.context["last"] = img
+                self.publish["nint"] = 1
+            if "roi_means" in result.payload:
+                mean = result.payload["roi_means"]
                 self.publish["roi_means"][result.event_number] = mean
 
-                if self.allsum is None:
-                    self.allsum = img
-                    self.nimg = 1
-                else:
-                    self.allsum = self.allsum + img
-                    self.nimg += 1
+            if self.allsum is None:
+                self.allsum = img
+                self.nimg = 1
+            else:
+                self.allsum = self.allsum + img
+                self.nimg += 1
 
-        elif analysis_mode == "sparsification":
+        if analysis_mode == "sparsification":
             if result.payload:
                 self.publish["hits"][result.event_number] = result.payload
                 if self.dset:
