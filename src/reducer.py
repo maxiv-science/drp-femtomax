@@ -93,7 +93,7 @@ class CmosReducer:
                 parts = self.cog_filename.split(".")
                 fn = f"{'.'.join(parts[:-1])}_photoncount.{parts[-1]}"
                 logger.info("write to %s", fn)
-                #fn = "./testoutput.h5"
+                fn = "./testoutput.h5"
                 self._fh = h5py.File(fn, 'w')
                 group = self._fh.create_group("hits")
                 threshold_counting = parameters["threshold_counting"].value
@@ -114,11 +114,14 @@ class CmosReducer:
                 group.create_dataset("pre_threshold", data=pre_threshold)
                 group.create_dataset("threshold_counting", data=threshold_counting)
                 meta = group.create_group("meta")
-                meta.create_dataset("dranspose_version", data=self.state.dranspose_version)
-                meta.create_dataset("mapreduce_commit_hash", data=self.state.mapreduce_version.commit_hash)
-                meta.create_dataset("mapreduce_branch_name", data=self.state.mapreduce_version.branch_name)
-                meta.create_dataset("mapreduce_timestamp", data=self.state.mapreduce_version.timestamp)
-                meta.create_dataset("mapreduce_repository_url", data=self.state.mapreduce_version.repository_url)
+                try:
+                    meta.create_dataset("dranspose_version", data=str(self.state.dranspose_version))
+                    meta.create_dataset("mapreduce_commit_hash", data=str(self.state.mapreduce_version.commit_hash))
+                    meta.create_dataset("mapreduce_branch_name", data=str(self.state.mapreduce_version.branch_name))
+                    meta.create_dataset("mapreduce_timestamp", data=str(self.state.mapreduce_version.timestamp))
+                    meta.create_dataset("mapreduce_repository_url", data=str(self.state.mapreduce_version.repository_url))
+                except:
+                    pass
 
                 self.xye_dset = group.create_dataset("hits_xye", (0,3), maxshape=(None,3 ), dtype=np.float64)
                 self.fr_dset = group.create_dataset("hits_frame_number", (0,), maxshape=(None, ), dtype=np.uint32)
