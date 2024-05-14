@@ -5,3 +5,4 @@ include:
 variables:
   DOCKER_REGISTRY: "harbor.maxiv.lu.se/daq"
   IMAGE_NAME: "dranspose/femtomax-cmos"
+  DOCKER_BUILD_EXTRA_ARGS: --build-arg CI_COMMIT_SHA=$CI_COMMIT_SHA --build-arg CI_COMMIT_REF_NAME=$CI_COMMIT_REF_NAME --build-arg CI_COMMIT_TIMESTAMP=$CI_COMMIT_TIMESTAMP --build-arg CI_PROJECT_URL=$CI_PROJECT_URL
