@@ -6,13 +6,31 @@ from dranspose.event import EventData
 from dranspose.parameters import IntParameter, StrParameter, BoolParameter
 from dranspose.middlewares.stream1 import parse
 from dranspose.middlewares.sardana import parse as sardana_parse
-from dranspose.data.stream1 import Stream1Data, Stream1Start
+from dranspose.data.stream1 import Stream1Data, Stream1Start, Stream1End
 import numpy as np
 from numpy import unravel_index
-from scipy.ndimage import gaussian_filter
+from scipy.ndimage import gaussian_filter, center_of_mass
 
 logger = logging.getLogger(__name__)
 
+def hithist(img, threshold_counting, pre_threshold): # This is the magic function that counts the photons using a 3x3 square (you can change the size of the box)
+    fullframe = img.clip(min=threshold_counting) - threshold_counting
+    positions = np.asarray(fullframe > 0).nonzero()
+    hits = set()
+    for x,y in zip(*positions):
+        small = fullframe[x-1:x+2, y-1:y+2]
+        if np.prod(small.shape) == 0:
+            continue
+
+        maxpos = np.unravel_index(small.argmax(), small.shape)
+        hits.add( (x+maxpos[0]-1, y+maxpos[1]-1))
+    pos = []
+    for x,y in hits:
+        hit = fullframe[x-1:x+2,y-1:y+2]
+        d1 = hit.sum()
+        cm = center_of_mass(hit)
+        pos.append((x+cm[0]-1, y+cm[1]-1, d1))
+    return [p for p in pos if p[2] > pre_threshold]
 
 class CmosWorker:
 
@@ -25,12 +43,15 @@ class CmosWorker:
             IntParameter(name="spot_size", default=7),
             BoolParameter(name="blur", default=False),
             StrParameter(name="analysis_mode", default="roi"),
+            IntParameter(name="threshold_counting", default=108), # important threshold for counting photons later
+            IntParameter(name="pre_threshold", default=5), # discard every spot with a total energy below that
             StrParameter(name="rois", default="{}"),
         ]
         return params
 
     def __init__(self, **kwargs):
         self.number = 0
+        self.cumu = None
 
     def process_event(self, event: EventData, parameters=None):
         ret = {}
@@ -116,6 +137,58 @@ class CmosWorker:
                 spots[i] = spot
                 offsets[i] = [frame, x - 3, y - 3]
             return {**ret, "spots": spots, "offsets": offsets}
+
+        elif parameters["analysis_mode"].value == "cog":
+            print("bla")
+            logger.debug("cog using parameters %s", parameters)
+            threshold_counting = parameters["threshold_counting"].value
+            pre_threshold = parameters["pre_threshold"].value
+            print("vals", threshold_counting, pre_threshold)
+            dat = None
+            if "andor3_balor" in event.streams:
+                dat = parse(event.streams["andor3_balor"])
+            elif "andor3_zyla10" in event.streams:
+                dat = parse(event.streams["andor3_zyla10"])
+
+            print(dat)
+            if isinstance(dat, Stream1Start):
+                print("using filename", dat.filename)
+                return {**ret, "cog_filename": dat.filename}
+
+            if isinstance(dat, Stream1End):
+                print("send off accumulated image")
+                return {**ret, "reconstructed": self.cumu}
+
+            if not isinstance(dat, Stream1Data):
+                return ret
+
+            print("there is data")
+
+            frame = dat.frame
+            logger.debug("frameno %d", frame)
+            hits = []
+            try:
+                rois = json.loads(parameters["rois"].value)
+                if "cog" in rois:
+                    tl = rois["cog"]["handles"]["_handleBottomLeft"]
+                    br = rois["cog"]["handles"]["_handleTopRight"]
+
+                    xslice = slice(min(int(tl[0]), int(br[0])), max(int(tl[0]), int(br[0])))
+                    yslice = slice(min(int(tl[1]), int(br[1])), max(int(tl[1]), int(br[1])))
+
+                    crop = dat.data[yslice, xslice]
+
+                    hits = hithist(crop, threshold_counting, pre_threshold)
+                    if self.cumu is None:
+                        self.cumu = np.zeros_like(dat.data)[yslice,xslice]
+
+                    for hit in hits:
+                        self.cumu[int(hit[0]), int(hit[1])] += 1
+                    #print(hits)
+            except:
+                pass
+
+            return {**ret, "hits": hits, "frame": dat.frame}
         return ret
 
     def finish(self, parameters=None):

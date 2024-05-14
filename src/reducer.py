@@ -1,3 +1,4 @@
+import json
 import logging
 from pathlib import Path
 
@@ -27,6 +28,8 @@ class CmosReducer:
         self.allsum = None
         self.nimg = None
         self.pileup_filename = None
+
+        self.cog_filename = None
 
         if "analysis_mode" in parameters:
             analysis_mode = parameters["analysis_mode"].value
@@ -82,6 +85,37 @@ class CmosReducer:
         if "pileup_filename" in result.payload:
             self.pileup_filename = result.payload["pileup_filename"]
 
+        if "cog_filename" in result.payload:
+            self.cog_filename = result.payload["cog_filename"]
+            if self._fh is None:
+                parts = self.cog_filename.split(".")
+                fn = f"{'.'.join(parts[:-1])}_photoncount.{parts[-1]}"
+                logger.info("write to %s", fn)
+                #fn = "./testoutput.h5"
+                self._fh = h5py.File(fn, 'w')
+                group = self._fh.create_group("hits")
+                threshold_counting = parameters["threshold_counting"].value
+                pre_threshold = parameters["pre_threshold"].value
+                try:
+                    rois = json.loads(parameters["rois"].value)
+                    if "cog" in rois:
+                        tl = rois["cog"]["handles"]["_handleBottomLeft"]
+                        br = rois["cog"]["handles"]["_handleTopRight"]
+
+                        xslice = slice(min(int(tl[0]), int(br[0])), max(int(tl[0]), int(br[0])))
+                        yslice = slice(min(int(tl[1]), int(br[1])), max(int(tl[1]), int(br[1])))
+                        group.create_dataset("roi_x", data=[xslice.start, xslice.stop])
+                        group.create_dataset("roi_y", data=[yslice.start, yslice.stop])
+                except:
+                    pass
+
+                group.create_dataset("pre_threshold", data=pre_threshold)
+                group.create_dataset("threshold_counting", data=threshold_counting)
+                self.xye_dset = group.create_dataset("hits_xye", (0,3), maxshape=(None,3 ), dtype=np.float64)
+                self.fr_dset = group.create_dataset("hits_frame_number", (0,), maxshape=(None, ), dtype=np.uint32)
+                self._fh["raw_data"] = h5py.ExternalLink(self.cog_filename, "/")
+
+
         if analysis_mode == "roi":
             if "img" in result.payload:
                 img = result.payload["img"]
@@ -122,6 +156,19 @@ class CmosReducer:
                     self.dset[oldsize:oldsize+nhits,:,:] = result.payload["spots"]
                     self.offsetdset[oldsize:oldsize+nhits,:] = result.payload["offsets"]
                     logger.debug("written record")
+
+        elif analysis_mode == "cog":
+            if "hits" in result.payload:
+                hits_fr = [result.payload["frame"]]*len(result.payload["hits"])
+
+                oldsize = self.xye_dset.shape[0]
+                self.xye_dset.resize(oldsize + len(hits_fr), axis=0)
+                self.fr_dset.resize(oldsize + len(hits_fr), axis=0)
+                self.xye_dset[oldsize:oldsize + len(hits_fr), :] = result.payload["hits"]
+                self.fr_dset[oldsize:oldsize + len(hits_fr)] = hits_fr
+            if "reconstructed" in result.payload:
+                self._fh["hits"].create_dataset("image", data=result.payload["reconstructed"])
+
 
     def finish(self, parameters=None):
         print(self.publish)
