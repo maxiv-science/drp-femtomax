@@ -22,12 +22,14 @@ class CmosReducer:
         ]
         return params
 
-    def __init__(self, parameters=None,  context=None,**kwargs):
+    def __init__(self, parameters=None,  context=None, state=None, **kwargs):
         self._fh = None
         self.publish = {}
         self.allsum = None
         self.nimg = None
         self.pileup_filename = None
+
+        self.state = state
 
         self.cog_filename = None
 
@@ -37,15 +39,15 @@ class CmosReducer:
             analysis_mode = "roi"
 
         self.context = context
-        if analysis_mode == "roi":
-            if "last" in context:
-                last = context["last"]
-            else:
-                last = np.zeros((100,100))
-            self.publish = {"last": last, "cropped": None, "nint": 0, "roi_means":{}}
+
+        if "last" in context:
+            last = context["last"]
+        else:
+            last = np.zeros((100,100))
+        self.publish = {"last": last, "cropped": None, "nint": 0, "roi_means":{}}
 
 
-        elif analysis_mode == "sparsification":
+        if analysis_mode == "sparsification":
             self.publish = {"hits": {}}
             try:
                 filename = parameters["filename"].value
@@ -111,6 +113,13 @@ class CmosReducer:
 
                 group.create_dataset("pre_threshold", data=pre_threshold)
                 group.create_dataset("threshold_counting", data=threshold_counting)
+                meta = group.create_group("meta")
+                meta.create_dataset("dranspose_version", data=self.state.dranspose_version)
+                meta.create_dataset("mapreduce_commit_hash", data=self.state.mapreduce_version.commit_hash)
+                meta.create_dataset("mapreduce_branch_name", data=self.state.mapreduce_version.branch_name)
+                meta.create_dataset("mapreduce_timestamp", data=self.state.mapreduce_version.timestamp)
+                meta.create_dataset("mapreduce_repository_url", data=self.state.mapreduce_version.repository_url)
+
                 self.xye_dset = group.create_dataset("hits_xye", (0,3), maxshape=(None,3 ), dtype=np.float64)
                 self.fr_dset = group.create_dataset("hits_frame_number", (0,), maxshape=(None, ), dtype=np.uint32)
                 self._fh["raw_data"] = h5py.ExternalLink(self.cog_filename, "/")
