@@ -1,4 +1,5 @@
 import logging
+import os
 import tempfile
 import json
 
@@ -7,6 +8,7 @@ from dranspose.parameters import IntParameter, StrParameter, BoolParameter
 from dranspose.middlewares.stream1 import parse
 from dranspose.middlewares.sardana import parse as sardana_parse
 from dranspose.data.stream1 import Stream1Data, Stream1Start, Stream1End
+from dranspose.data.sardana import SardanaDataDescription
 import numpy as np
 from numpy import unravel_index
 from scipy.ndimage import gaussian_filter, center_of_mass
@@ -151,7 +153,15 @@ class CmosWorker:
                 dat = parse(event.streams["andor3_zyla10"])
 
             if isinstance(dat, Stream1Start):
-                return {**ret, "cog_filename": dat.filename}
+                if isinstance(ret["sardana"], SardanaDataDescription):
+                    print("sardana start is", ret["sardana"])
+                    dstname = os.path.join(ret["sardana"].scandir, "process", "photoncount")
+                    for fn in ret["sardana"].scanfile:
+                        if fn.endswith(".h5"):
+                            name = f'{fn[:-3]}-{ret["sardana"].serialno}.h5'
+                            dstname = os.path.join(dstname, name)
+                            break
+                    return {**ret, "cog_filename": dstname}
 
             if isinstance(dat, Stream1End):
                 return {**ret, "reconstructed": self.cumu}

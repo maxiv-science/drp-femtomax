@@ -90,43 +90,43 @@ class CmosReducer:
         if "cog_filename" in result.payload:
             self.cog_filename = result.payload["cog_filename"]
             if self._fh is None:
-                parts = self.cog_filename.split(".")
-                fn = f"{'.'.join(parts[:-1])}_photoncount.{parts[-1]}"
+                #parts = self.cog_filename.split(".")
+                fn = self.cog_filename
                 logger.info("write to %s", fn)
-                #fn = "./testoutput.h5"
-                if not os.path.isfile(fn):
-                    self._fh = h5py.File(fn, 'w')
-                    group = self._fh.create_group("hits")
-                    threshold_counting = parameters["threshold_counting"].value
-                    pre_threshold = parameters["pre_threshold"].value
-                    try:
-                        rois = json.loads(parameters["rois"].value)
-                        if "cog" in rois:
-                            tl = rois["cog"]["handles"]["_handleBottomLeft"]
-                            br = rois["cog"]["handles"]["_handleTopRight"]
+                #fn = "./process/photoncount/testoutput.h5"
+                os.makedirs(os.path.dirname(fn), exist_ok=True)
+                self._fh = h5py.File(fn, 'w')
+                group = self._fh.create_group("hits")
+                threshold_counting = parameters["threshold_counting"].value
+                pre_threshold = parameters["pre_threshold"].value
+                try:
+                    rois = json.loads(parameters["rois"].value)
+                    if "cog" in rois:
+                        tl = rois["cog"]["handles"]["_handleBottomLeft"]
+                        br = rois["cog"]["handles"]["_handleTopRight"]
 
-                            xslice = slice(min(int(tl[0]), int(br[0])), max(int(tl[0]), int(br[0])))
-                            yslice = slice(min(int(tl[1]), int(br[1])), max(int(tl[1]), int(br[1])))
-                            group.create_dataset("roi_x", data=[xslice.start, xslice.stop])
-                            group.create_dataset("roi_y", data=[yslice.start, yslice.stop])
-                    except:
-                        pass
+                        xslice = slice(min(int(tl[0]), int(br[0])), max(int(tl[0]), int(br[0])))
+                        yslice = slice(min(int(tl[1]), int(br[1])), max(int(tl[1]), int(br[1])))
+                        group.create_dataset("roi_x", data=[xslice.start, xslice.stop])
+                        group.create_dataset("roi_y", data=[yslice.start, yslice.stop])
+                except:
+                    pass
 
-                    group.create_dataset("pre_threshold", data=pre_threshold)
-                    group.create_dataset("threshold_counting", data=threshold_counting)
-                    meta = group.create_group("meta")
-                    try:
-                        meta.create_dataset("dranspose_version", data=str(self.state.dranspose_version))
-                        meta.create_dataset("mapreduce_commit_hash", data=str(self.state.mapreduce_version.commit_hash))
-                        meta.create_dataset("mapreduce_branch_name", data=str(self.state.mapreduce_version.branch_name))
-                        meta.create_dataset("mapreduce_timestamp", data=str(self.state.mapreduce_version.timestamp))
-                        meta.create_dataset("mapreduce_repository_url", data=str(self.state.mapreduce_version.repository_url))
-                    except:
-                        pass
+                group.create_dataset("pre_threshold", data=pre_threshold)
+                group.create_dataset("threshold_counting", data=threshold_counting)
+                meta = group.create_group("meta")
+                try:
+                    meta.create_dataset("dranspose_version", data=str(self.state.dranspose_version))
+                    meta.create_dataset("mapreduce_commit_hash", data=str(self.state.mapreduce_version.commit_hash))
+                    meta.create_dataset("mapreduce_branch_name", data=str(self.state.mapreduce_version.branch_name))
+                    meta.create_dataset("mapreduce_timestamp", data=str(self.state.mapreduce_version.timestamp))
+                    meta.create_dataset("mapreduce_repository_url", data=str(self.state.mapreduce_version.repository_url))
+                except:
+                    pass
 
-                    self.xye_dset = group.create_dataset("hits_xye", (0,3), maxshape=(None,3 ), dtype=np.float64)
-                    self.fr_dset = group.create_dataset("hits_frame_number", (0,), maxshape=(None, ), dtype=np.uint32)
-                    self._fh["raw_data"] = h5py.ExternalLink(self.cog_filename, "/")
+                self.xye_dset = group.create_dataset("hits_xye", (0,3), maxshape=(None,3 ), dtype=np.float64)
+                self.fr_dset = group.create_dataset("hits_frame_number", (0,), maxshape=(None, ), dtype=np.uint32)
+                self._fh["raw_data"] = h5py.ExternalLink(self.cog_filename, "/")
 
 
         #if analysis_mode == "roi":
