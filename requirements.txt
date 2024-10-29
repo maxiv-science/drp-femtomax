@@ -1,3 +1,4 @@
 dranspose @ git+https://gitlab.maxiv.lu.se/scisw/daq-modules/dranspose@main
 h5py
 scipy
+h5pyd
