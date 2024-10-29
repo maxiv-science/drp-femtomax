@@ -1,8 +1,21 @@
 include:
   - project: 'kits-maxiv/cfg-maxiv-gitlabci'
+    file: '/PreCommit.gitlab-ci.yml'
+  - project: 'kits-maxiv/cfg-maxiv-gitlabci'
     file: '/Docker.gitlab-ci.yml'
 
 variables:
   DOCKER_REGISTRY: "harbor.maxiv.lu.se/daq"
   IMAGE_NAME: "dranspose/femtomax-cmos"
   DOCKER_BUILD_EXTRA_ARGS: --build-arg CI_COMMIT_SHA=$CI_COMMIT_SHA --build-arg CI_COMMIT_REF_NAME=$CI_COMMIT_REF_NAME --build-arg CI_COMMIT_TIMESTAMP=$CI_COMMIT_TIMESTAMP --build-arg CI_PROJECT_URL=$CI_PROJECT_URL
+
+
+test_docker_image:
+  stage: test
+  tags:
+    - kubernetes
+  image: ${DOCKER_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}
+  script:
+    - python -m pip install pytest pytest-cov
+    - pytest --cov=src --cov-branch --cov-report term-missing --cov-report html --log-cli-level=INFO
+  coverage: '/^TOTAL.+?(\d+\%)$/'

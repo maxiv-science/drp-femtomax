@@ -15,27 +15,30 @@ from scipy.ndimage import gaussian_filter, center_of_mass
 
 logger = logging.getLogger(__name__)
 
-def hithist(img, threshold_counting, pre_threshold): # This is the magic function that counts the photons using a 3x3 square (you can change the size of the box)
+
+def hithist(
+    img, threshold_counting, pre_threshold
+):  # This is the magic function that counts the photons using a 3x3 square (you can change the size of the box)
     fullframe = img.clip(min=threshold_counting) - threshold_counting
     positions = np.asarray(fullframe > 0).nonzero()
     hits = set()
-    for x,y in zip(*positions):
-        small = fullframe[x-1:x+2, y-1:y+2]
+    for x, y in zip(*positions):
+        small = fullframe[x - 1 : x + 2, y - 1 : y + 2]
         if np.prod(small.shape) == 0:
             continue
 
         maxpos = np.unravel_index(small.argmax(), small.shape)
-        hits.add( (x+maxpos[0]-1, y+maxpos[1]-1))
+        hits.add((x + maxpos[0] - 1, y + maxpos[1] - 1))
     pos = []
-    for x,y in hits:
-        hit = fullframe[x-1:x+2,y-1:y+2]
+    for x, y in hits:
+        hit = fullframe[x - 1 : x + 2, y - 1 : y + 2]
         d1 = hit.sum()
         cm = center_of_mass(hit)
-        pos.append((x+cm[0]-1, y+cm[1]-1, d1))
+        pos.append((x + cm[0] - 1, y + cm[1] - 1, d1))
     return [p for p in pos if p[2] > pre_threshold]
 
-class CmosWorker:
 
+class CmosWorker:
     @staticmethod
     def describe_parameters():
         params = [
@@ -45,8 +48,12 @@ class CmosWorker:
             IntParameter(name="spot_size", default=7),
             BoolParameter(name="blur", default=False),
             StrParameter(name="analysis_mode", default="roi"),
-            IntParameter(name="threshold_counting", default=108), # important threshold for counting photons later
-            IntParameter(name="pre_threshold", default=5), # discard every spot with a total energy below that
+            IntParameter(
+                name="threshold_counting", default=108
+            ),  # important threshold for counting photons later
+            IntParameter(
+                name="pre_threshold", default=5
+            ),  # discard every spot with a total energy below that
             StrParameter(name="rois", default="{}"),
         ]
         return params
@@ -55,7 +62,62 @@ class CmosWorker:
         self.number = 0
         self.cumu = None
 
-    def process_event(self, event: EventData, parameters=None):
+    def _cog(self, event, parameters, ret):
+        logger.debug("cog using parameters %s", parameters)
+        threshold_counting = parameters["threshold_counting"].value
+        pre_threshold = parameters["pre_threshold"].value
+        bg = parameters["background"].value
+
+        dat = None
+        if "andor3_balor" in event.streams:
+            dat = parse(event.streams["andor3_balor"])
+        elif "andor3_zyla10" in event.streams:
+            dat = parse(event.streams["andor3_zyla10"])
+
+        if isinstance(dat, Stream1Start):
+            if isinstance(ret["sardana"], SardanaDataDescription):
+                print("sardana start is", ret["sardana"])
+                dstname = os.path.join(ret["sardana"].scandir, "process", "photoncount")
+                for fn in ret["sardana"].scanfile:
+                    if fn.endswith(".h5"):
+                        name = f'{fn[:-3]}-{ret["sardana"].serialno}.h5'
+                        dstname = os.path.join(dstname, name)
+                        break
+                return {**ret, "cog_filename": dstname}
+
+        if isinstance(dat, Stream1End):
+            return {**ret, "reconstructed": self.cumu}
+
+        if not isinstance(dat, Stream1Data):
+            return ret
+
+        frame = dat.frame
+        logger.debug("frameno %d", frame)
+        hits = []
+        try:
+            rois = json.loads(parameters["rois"].value)
+            if "cog" in rois:
+                tl = rois["cog"]["handles"]["_handleBottomLeft"]
+                br = rois["cog"]["handles"]["_handleTopRight"]
+
+                xslice = slice(min(int(tl[0]), int(br[0])), max(int(tl[0]), int(br[0])))
+                yslice = slice(min(int(tl[1]), int(br[1])), max(int(tl[1]), int(br[1])))
+
+                crop = dat.data[yslice, xslice]
+
+                hits = hithist(crop, threshold_counting, pre_threshold)
+                if self.cumu is None:
+                    self.cumu = np.zeros_like(dat.data)[yslice, xslice]
+
+                for hit in hits:
+                    self.cumu[int(hit[0]), int(hit[1])] += 1
+                # print(hits)
+        except Exception:
+            pass
+        dark_corr = dat.data.clip(min=bg) - bg
+        return {**ret, "hits": hits, "frame": dat.frame, "img": dark_corr}
+
+    def process_event(self, event: EventData, parameters=None, **kwargs):
         ret = {}
         if "sardana" in event.streams:
             ret["sardana"] = sardana_parse(event.streams["sardana"])
@@ -93,17 +155,20 @@ class CmosWorker:
                         tl = rd["handles"]["_handleBottomLeft"]
                         br = rd["handles"]["_handleTopRight"]
 
-                        xslice = slice(min(int(tl[0]), int(br[0])), max(int(tl[0]), int(br[0])))
-                        yslice = slice(min(int(tl[1]), int(br[1])), max(int(tl[1]), int(br[1])))
+                        xslice = slice(
+                            min(int(tl[0]), int(br[0])), max(int(tl[0]), int(br[0]))
+                        )
+                        yslice = slice(
+                            min(int(tl[1]), int(br[1])), max(int(tl[1]), int(br[1]))
+                        )
 
                         crop = dark_corr[yslice, xslice]
                         scalar = crop.mean()
                         means[rn] = scalar
-                except:
+                except Exception:
                     pass
 
-                return {"img": dark_corr , "cropped": None, "roi_means": means, **ret}
-
+                return {"img": dark_corr, "cropped": None, "roi_means": means, **ret}
 
         elif parameters["analysis_mode"].data == b"sparsification":
             logger.debug("using parameters %s", parameters)
@@ -127,74 +192,21 @@ class CmosWorker:
             positions = np.asarray(padded > thr).nonzero()
             hits = set()
             for x, y in zip(*positions):
-                small = padded[x - 1:x + 2, y - 1:y + 2]
+                small = padded[x - 1 : x + 2, y - 1 : y + 2]
                 maxpos = unravel_index(small.argmax(), small.shape)
                 hits.add((x + maxpos[0] - 1, y + maxpos[1] - 1))
 
             logger.debug("found %d hits", len(hits))
-            spots = np.zeros((len(hits), size,size))
+            spots = np.zeros((len(hits), size, size))
             offsets = np.zeros((len(hits), 3), dtype=np.int16)
-            for i, (x,y) in enumerate(hits):
-                spot = padded[pad + x - 3:pad + x + 4, pad + y - 3:pad + y + 4]
+            for i, (x, y) in enumerate(hits):
+                spot = padded[pad + x - 3 : pad + x + 4, pad + y - 3 : pad + y + 4]
                 spots[i] = spot
                 offsets[i] = [frame, x - 3, y - 3]
             return {**ret, "spots": spots, "offsets": offsets}
 
         elif parameters["analysis_mode"].value == "cog":
-            logger.debug("cog using parameters %s", parameters)
-            threshold_counting = parameters["threshold_counting"].value
-            pre_threshold = parameters["pre_threshold"].value
-            bg = parameters["background"].value
-
-            dat = None
-            if "andor3_balor" in event.streams:
-                dat = parse(event.streams["andor3_balor"])
-            elif "andor3_zyla10" in event.streams:
-                dat = parse(event.streams["andor3_zyla10"])
-
-            if isinstance(dat, Stream1Start):
-                if isinstance(ret["sardana"], SardanaDataDescription):
-                    print("sardana start is", ret["sardana"])
-                    dstname = os.path.join(ret["sardana"].scandir, "process", "photoncount")
-                    for fn in ret["sardana"].scanfile:
-                        if fn.endswith(".h5"):
-                            name = f'{fn[:-3]}-{ret["sardana"].serialno}.h5'
-                            dstname = os.path.join(dstname, name)
-                            break
-                    return {**ret, "cog_filename": dstname}
-
-            if isinstance(dat, Stream1End):
-                return {**ret, "reconstructed": self.cumu}
-
-            if not isinstance(dat, Stream1Data):
-                return ret
-
-
-            frame = dat.frame
-            logger.debug("frameno %d", frame)
-            hits = []
-            try:
-                rois = json.loads(parameters["rois"].value)
-                if "cog" in rois:
-                    tl = rois["cog"]["handles"]["_handleBottomLeft"]
-                    br = rois["cog"]["handles"]["_handleTopRight"]
-
-                    xslice = slice(min(int(tl[0]), int(br[0])), max(int(tl[0]), int(br[0])))
-                    yslice = slice(min(int(tl[1]), int(br[1])), max(int(tl[1]), int(br[1])))
-
-                    crop = dat.data[yslice, xslice]
-
-                    hits = hithist(crop, threshold_counting, pre_threshold)
-                    if self.cumu is None:
-                        self.cumu = np.zeros_like(dat.data)[yslice,xslice]
-
-                    for hit in hits:
-                        self.cumu[int(hit[0]), int(hit[1])] += 1
-                    #print(hits)
-            except:
-                pass
-            dark_corr = dat.data.clip(min=bg) - bg
-            return {**ret, "hits": hits, "frame": dat.frame, "img": dark_corr}
+            return self._cog(event, parameters, ret)
         return ret
 
     def finish(self, parameters=None):

@@ -11,6 +11,7 @@ from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
+
 class CmosReducer:
     @staticmethod
     def describe_parameters():
@@ -22,7 +23,7 @@ class CmosReducer:
         ]
         return params
 
-    def __init__(self, parameters=None,  context=None, state=None, **kwargs):
+    def __init__(self, parameters=None, context=None, state=None, **kwargs):
         self._fh = None
         self.publish = {}
         self.allsum = None
@@ -32,6 +33,7 @@ class CmosReducer:
         self.state = state
 
         self.cog_filename = None
+        self.xye_dset = None
 
         if "analysis_mode" in parameters:
             analysis_mode = parameters["analysis_mode"].value
@@ -43,33 +45,102 @@ class CmosReducer:
         if "last" in context:
             last = context["last"]
         else:
-            last = np.zeros((100,100))
-        self.publish = {"last": last, "cropped": None, "nint": 0, "roi_means":{}}
-
+            last = np.zeros((100, 100))
+        self.publish = {"last": last, "cropped": None, "nint": 0, "roi_means": {}}
 
         if analysis_mode == "sparsification":
             self.publish = {"hits": {}}
             try:
                 filename = parameters["filename"].value
-            except:
+            except KeyError:
                 filename = None
             size = parameters["spot_size"].value
             logger.info("writing to file %s", filename)
             self.dset = None
             if filename:
                 if os.path.isfile(filename):
-                    self._fh = h5py.File(filename, 'a')
+                    self._fh = h5py.File(filename, "a")
                     self.offsetdset = self._fh.get("sparse/offset")
                     self.dset = self._fh.get("sparse/data")
                 else:
-                    self._fh = h5py.File(filename, 'w')
+                    self._fh = h5py.File(filename, "w")
                     group = self._fh.create_group("sparse")
-                    self.offsetdset = group.create_dataset("offset", (0,3), maxshape=(None,3), dtype=np.int16)
-                    self.dset = group.create_dataset("data", (0,size, size), maxshape=(None,size, size), dtype=np.uint16)
-                    self._offset_dset_name = f"sparse/offset"
+                    self.offsetdset = group.create_dataset(
+                        "offset", (0, 3), maxshape=(None, 3), dtype=np.int16
+                    )
+                    self.dset = group.create_dataset(
+                        "data",
+                        (0, size, size),
+                        maxshape=(None, size, size),
+                        dtype=np.uint16,
+                    )
+                    self._offset_dset_name = "sparse/offset"
                 logger.info("opened file at %s", self._fh)
 
         self.publish["sardana"] = {}
+
+    def _setup_cog_file(self, result, parameters):
+        self.cog_filename = result.payload["cog_filename"]
+        if self._fh is None:
+            # parts = self.cog_filename.split(".")
+            fn = self.cog_filename
+            logger.info("write to %s", fn)
+            # fn = "./process/photoncount/testoutput.h5"
+            os.makedirs(os.path.dirname(fn), exist_ok=True)
+            self._fh = h5py.File(fn, "w")
+            group = self._fh.create_group("hits")
+            threshold_counting = parameters["threshold_counting"].value
+            pre_threshold = parameters["pre_threshold"].value
+            try:
+                rois = json.loads(parameters["rois"].value)
+                if "cog" in rois:
+                    tl = rois["cog"]["handles"]["_handleBottomLeft"]
+                    br = rois["cog"]["handles"]["_handleTopRight"]
+
+                    xslice = slice(
+                        min(int(tl[0]), int(br[0])), max(int(tl[0]), int(br[0]))
+                    )
+                    yslice = slice(
+                        min(int(tl[1]), int(br[1])), max(int(tl[1]), int(br[1]))
+                    )
+                    group.create_dataset("roi_x", data=[xslice.start, xslice.stop])
+                    group.create_dataset("roi_y", data=[yslice.start, yslice.stop])
+            except Exception:
+                pass
+
+            group.create_dataset("pre_threshold", data=pre_threshold)
+            group.create_dataset("threshold_counting", data=threshold_counting)
+            meta = group.create_group("meta")
+            try:
+                meta.create_dataset(
+                    "dranspose_version", data=str(self.state.dranspose_version)
+                )
+                meta.create_dataset(
+                    "mapreduce_commit_hash",
+                    data=str(self.state.mapreduce_version.commit_hash),
+                )
+                meta.create_dataset(
+                    "mapreduce_branch_name",
+                    data=str(self.state.mapreduce_version.branch_name),
+                )
+                meta.create_dataset(
+                    "mapreduce_timestamp",
+                    data=str(self.state.mapreduce_version.timestamp),
+                )
+                meta.create_dataset(
+                    "mapreduce_repository_url",
+                    data=str(self.state.mapreduce_version.repository_url),
+                )
+            except Exception:
+                pass
+
+            self.xye_dset = group.create_dataset(
+                "hits_xye", (0, 3), maxshape=(None, 3), dtype=np.float64
+            )
+            self.fr_dset = group.create_dataset(
+                "hits_frame_number", (0,), maxshape=(None,), dtype=np.uint32
+            )
+            self._fh["raw_data"] = h5py.ExternalLink(self.cog_filename, "/")
 
     def process_result(self, result: ResultData, parameters=None):
         if result.payload is None:
@@ -82,54 +153,17 @@ class CmosReducer:
 
         if "sardana" in result.payload:
             if result.payload["sardana"] is not None:
-                self.publish["sardana"][result.event_number] = result.payload["sardana"].model_dump()
+                self.publish["sardana"][result.event_number] = result.payload[
+                    "sardana"
+                ].model_dump()
 
         if "pileup_filename" in result.payload:
             self.pileup_filename = result.payload["pileup_filename"]
 
         if "cog_filename" in result.payload:
-            self.cog_filename = result.payload["cog_filename"]
-            if self._fh is None:
-                #parts = self.cog_filename.split(".")
-                fn = self.cog_filename
-                logger.info("write to %s", fn)
-                #fn = "./process/photoncount/testoutput.h5"
-                os.makedirs(os.path.dirname(fn), exist_ok=True)
-                self._fh = h5py.File(fn, 'w')
-                group = self._fh.create_group("hits")
-                threshold_counting = parameters["threshold_counting"].value
-                pre_threshold = parameters["pre_threshold"].value
-                try:
-                    rois = json.loads(parameters["rois"].value)
-                    if "cog" in rois:
-                        tl = rois["cog"]["handles"]["_handleBottomLeft"]
-                        br = rois["cog"]["handles"]["_handleTopRight"]
+            self._setup_cog_file(result, parameters)
 
-                        xslice = slice(min(int(tl[0]), int(br[0])), max(int(tl[0]), int(br[0])))
-                        yslice = slice(min(int(tl[1]), int(br[1])), max(int(tl[1]), int(br[1])))
-                        group.create_dataset("roi_x", data=[xslice.start, xslice.stop])
-                        group.create_dataset("roi_y", data=[yslice.start, yslice.stop])
-                except:
-                    pass
-
-                group.create_dataset("pre_threshold", data=pre_threshold)
-                group.create_dataset("threshold_counting", data=threshold_counting)
-                meta = group.create_group("meta")
-                try:
-                    meta.create_dataset("dranspose_version", data=str(self.state.dranspose_version))
-                    meta.create_dataset("mapreduce_commit_hash", data=str(self.state.mapreduce_version.commit_hash))
-                    meta.create_dataset("mapreduce_branch_name", data=str(self.state.mapreduce_version.branch_name))
-                    meta.create_dataset("mapreduce_timestamp", data=str(self.state.mapreduce_version.timestamp))
-                    meta.create_dataset("mapreduce_repository_url", data=str(self.state.mapreduce_version.repository_url))
-                except:
-                    pass
-
-                self.xye_dset = group.create_dataset("hits_xye", (0,3), maxshape=(None,3 ), dtype=np.float64)
-                self.fr_dset = group.create_dataset("hits_frame_number", (0,), maxshape=(None, ), dtype=np.uint32)
-                self._fh["raw_data"] = h5py.ExternalLink(self.cog_filename, "/")
-
-
-        #if analysis_mode == "roi":
+        # if analysis_mode == "roi":
         if "img" in result.payload:
             img = result.payload["img"]
 
@@ -166,22 +200,29 @@ class CmosReducer:
                     self.dset.resize(oldsize + nhits, axis=0)
                     self.offsetdset.resize(oldsize + nhits, axis=0)
 
-                    self.dset[oldsize:oldsize+nhits,:,:] = result.payload["spots"]
-                    self.offsetdset[oldsize:oldsize+nhits,:] = result.payload["offsets"]
+                    self.dset[oldsize : oldsize + nhits, :, :] = result.payload["spots"]
+                    self.offsetdset[oldsize : oldsize + nhits, :] = result.payload[
+                        "offsets"
+                    ]
                     logger.debug("written record")
 
         elif analysis_mode == "cog":
             if "hits" in result.payload:
-                hits_fr = [result.payload["frame"]]*len(result.payload["hits"])
+                hits_fr = [result.payload["frame"]] * len(result.payload["hits"])
 
-                oldsize = self.xye_dset.shape[0]
-                self.xye_dset.resize(oldsize + len(hits_fr), axis=0)
-                self.fr_dset.resize(oldsize + len(hits_fr), axis=0)
-                self.xye_dset[oldsize:oldsize + len(hits_fr), :] = result.payload["hits"]
-                self.fr_dset[oldsize:oldsize + len(hits_fr)] = hits_fr
+                if self.xye_dset is not None:
+                    oldsize = self.xye_dset.shape[0]
+                    self.xye_dset.resize(oldsize + len(hits_fr), axis=0)
+                    self.fr_dset.resize(oldsize + len(hits_fr), axis=0)
+                    self.xye_dset[oldsize : oldsize + len(hits_fr), :] = result.payload[
+                        "hits"
+                    ]
+                    self.fr_dset[oldsize : oldsize + len(hits_fr)] = hits_fr
             if "reconstructed" in result.payload:
-                self._fh["hits"].create_dataset("image", data=result.payload["reconstructed"])
-
+                if self._fh is not None:
+                    self._fh["hits"].create_dataset(
+                        "image", data=result.payload["reconstructed"]
+                    )
 
     def finish(self, parameters=None):
         print(self.publish)
@@ -192,7 +233,7 @@ class CmosReducer:
                 pileup = parameters["pileup"].value
             except Exception as e:
                 print(e.__repr__())
-                pileup=False
+                pileup = False
             print("sumup to ", self.pileup_filename, pileup, parameters["pileup"].data)
             if pileup and self.pileup_filename:
                 if self.pileup_filename.endswith(".h5"):
@@ -202,9 +243,9 @@ class CmosReducer:
 
                 if os.path.isfile(filename):
                     logger.error("file exists already, adding time suffix")
-                    filename+=datetime.now().isoformat()+".h5"
+                    filename += datetime.now().isoformat() + ".h5"
                 print("opening file", Path(filename))
-                self._fh = h5py.File(filename, 'w')
+                self._fh = h5py.File(filename, "w")
                 group = self._fh.create_group("pileup")
                 print("group is", group)
                 self.nimagesdset = group.create_dataset("nimages", data=self.nimg)
