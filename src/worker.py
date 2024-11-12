@@ -117,7 +117,7 @@ class CmosWorker:
         dark_corr = dat.data.clip(min=bg) - bg
         return {**ret, "hits": hits, "frame": dat.frame, "img": dark_corr}
 
-    def process_event(self, event: EventData, parameters=None, **kwargs):
+    def process_event(self, event: EventData, parameters=None, *args, **kwargs):
         ret = {}
         if "sardana" in event.streams:
             ret["sardana"] = sardana_parse(event.streams["sardana"])
