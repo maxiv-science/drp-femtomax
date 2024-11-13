@@ -116,6 +116,8 @@ From the header of the stream, we extract the filename to use as the process fil
 
 It reconstructs a "clean" image for further use with the same shape as the input.
 
+If the balor gets too many photons, it performs the same background subtraction as the Zyla 10, described below.
+
 ## Zyla 10
 As single photon detection is hard with the zyla, we only perform this in post-processing.
 

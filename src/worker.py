@@ -2,6 +2,7 @@ import logging
 import os
 import tempfile
 import json
+from dataclasses import dataclass
 
 from dranspose.event import EventData
 from dranspose.parameters import IntParameter, StrParameter, BoolParameter
@@ -11,6 +12,7 @@ from dranspose.data.stream1 import Stream1Data, Stream1Start, Stream1End
 from dranspose.data.sardana import SardanaDataDescription
 import numpy as np
 from numpy import unravel_index
+from pydantic import BaseModel, ConfigDict
 from scipy.ndimage import gaussian_filter, center_of_mass
 
 logger = logging.getLogger(__name__)
@@ -38,29 +40,56 @@ def hithist(
     return [p for p in pos if p[2] > pre_threshold]
 
 
+class IncompatibleImages(Exception):
+    pass
+
+
+class CleanImage(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    image: np.ndarray
+    crop_top: int = 0
+    crop_right: int = 0
+    crop_bottom: int = 0
+    crop_left: int = 0
+
+    def __add__(self, other: "CleanImage") -> "CleanImage":
+        if self.image.shape == other.image.shape:
+            if self.crop_top == other.crop_top and self.crop_right == other.crop_right and self.crop_bottom == other.crop_bottom and self.crop_left == other.crop_left:
+                return CleanImage(image=self.image + other.image, crop_top=self.crop_top, crop_right=self.crop_right,
+                                  crop_bottom=self.crop_bottom, crop_left=self.crop_left)
+        raise IncompatibleImages()
+
+    def to_dict(self):
+        return {"image":self.image, "crop": {n[5:]: val for n, val in self.__dict__.items() if n.startswith("crop_")}  }
+
+class WorkerResult(BaseModel):
+    sardana: SardanaDataDescription | None = None
+    means: dict[str, float] = {}
+    image: CleanImage | None = None
+
+
 class CmosWorker:
     @staticmethod
     def describe_parameters():
         params = [
-            IntParameter(name="background", default=0),
-            IntParameter(name="threshold", default=12),
-            IntParameter(name="sigma", default=4),
-            IntParameter(name="spot_size", default=7),
-            BoolParameter(name="blur", default=False),
-            StrParameter(name="analysis_mode", default="roi"),
+            IntParameter(name="cmos_background", default=100, description="The initial background subtraction, similar to a dark image"),
+            IntParameter(name="cmos_threshold", default=12, description="Only consider values above this threshold"),
             IntParameter(
-                name="threshold_counting", default=108
-            ),  # important threshold for counting photons later
+                name="threshold_counting", default=108,
+                description="important threshold for counting photons later"
+            ),
             IntParameter(
-                name="pre_threshold", default=5
-            ),  # discard every spot with a total energy below that
+                name="pre_threshold", default=1100,
+                description="discard every spot with a total energy below that"
+            ),
             StrParameter(name="rois", default="{}"),
         ]
         return params
 
     def __init__(self, **kwargs):
         self.number = 0
-        self.cumu = None
+        self.accum = None
 
     def _cog(self, event, parameters, ret):
         logger.debug("cog using parameters %s", parameters)
@@ -117,21 +146,67 @@ class CmosWorker:
         dark_corr = dat.data.clip(min=bg) - bg
         return {**ret, "hits": hits, "frame": dat.frame, "img": dark_corr}
 
-    def process_event(self, event: EventData, parameters=None, *args, **kwargs):
-        ret = {}
+    def parse_rois(self, parameters):
+        slice_rois = {}
+        try:
+            rois = json.loads(parameters["rois"].value)
+            for roi_name in rois:
+                tl = rois[roi_name]["handles"]["_handleBottomLeft"]
+                br = rois[roi_name]["handles"]["_handleTopRight"]
+
+                xslice = slice(min(int(tl[0]), int(br[0])), max(int(tl[0]), int(br[0])))
+                yslice = slice(min(int(tl[1]), int(br[1])), max(int(tl[1]), int(br[1])))
+
+                slice_rois[roi_name] = np.s_[yslice, xslice]
+        except Exception:
+            pass
+        return slice_rois
+
+
+
+
+    def process_event(self, event: EventData, parameters=None, tick=False, *args, **kwargs):
+        ret = WorkerResult()
         if "sardana" in event.streams:
-            ret["sardana"] = sardana_parse(event.streams["sardana"])
+            ret.sardana = sardana_parse(event.streams["sardana"])
 
-        if parameters["analysis_mode"].value == "roi":
-            dat = None
-            if "andor3_balor" in event.streams:
-                dat = parse(event.streams["andor3_balor"])
-            elif "andor3_zyla10" in event.streams:
-                dat = parse(event.streams["andor3_zyla10"])
-            elif "pilatus" in event.streams:
-                dat = parse(event.streams["pilatus"])
+        rois = self.parse_rois(parameters)
 
-            if dat:
+        clean_image = None
+        if "andor3_balor" in event.streams:
+            data = parse(event.streams["andor3_balor"])
+
+            if "photon" in rois:
+                #TODO: if header, parse filename
+                #TODO: if image, process roi and place into clean image
+                if isinstance(data, Stream1Data):
+                    clean_image = CleanImage(image=np.ones((100,100)))
+                    #TODO: if too much photons fall back to normal cmos processing
+            else:
+                #TODO: self.process_cmos(data)
+                pass
+            clean_image = CleanImage(image= np.ones((100, 100)), )
+
+        elif "andor3_zyla10" in event.streams:
+            data = parse(event.streams["andor3_zyla10"])
+            # TODO: self.process_cmos(data)
+            clean_image = CleanImage(image= np.ones((100, 100)), )
+
+        elif "pilatus" in event.streams:
+            data = parse(event.streams["pilatus"])
+            clean_image = CleanImage(image= np.ones((100, 100)), )
+
+        if clean_image is not None:
+            ret.image = clean_image
+
+            means = {}
+            for name, sli in rois.items():
+                crop = clean_image.image[sli]
+                scalar = crop.mean()
+                means[name] = scalar
+            ret.means = means
+
+            if False:
                 bg = parameters["background"].value
                 if isinstance(dat, Stream1Start):
                     print("start message", dat)
@@ -170,43 +245,6 @@ class CmosWorker:
 
                 return {"img": dark_corr, "cropped": None, "roi_means": means, **ret}
 
-        elif parameters["analysis_mode"].data == b"sparsification":
-            logger.debug("using parameters %s", parameters)
-            bg = int(parameters["background"].data)
-            thr = int(parameters["threshold"].data)
-            size = int(parameters["spot_size"].data)
-            dat = None
-            if "andor3_balor" in event.streams:
-                dat = parse(event.streams["andor3_balor"])
-            elif "andor3_zyla10" in event.streams:
-                dat = parse(event.streams["andor3_zyla10"])
-
-            if not isinstance(dat, Stream1Data):
-                return ret
-            dark_corr = dat.data.clip(min=bg) - bg
-            pad = int(np.ceil(size / 2))
-            padded = np.pad(dark_corr, pad)
-
-            frame = dat.frame
-            logger.debug("frameno %d", frame)
-            positions = np.asarray(padded > thr).nonzero()
-            hits = set()
-            for x, y in zip(*positions):
-                small = padded[x - 1 : x + 2, y - 1 : y + 2]
-                maxpos = unravel_index(small.argmax(), small.shape)
-                hits.add((x + maxpos[0] - 1, y + maxpos[1] - 1))
-
-            logger.debug("found %d hits", len(hits))
-            spots = np.zeros((len(hits), size, size))
-            offsets = np.zeros((len(hits), 3), dtype=np.int16)
-            for i, (x, y) in enumerate(hits):
-                spot = padded[pad + x - 3 : pad + x + 4, pad + y - 3 : pad + y + 4]
-                spots[i] = spot
-                offsets[i] = [frame, x - 3, y - 3]
-            return {**ret, "spots": spots, "offsets": offsets}
-
-        elif parameters["analysis_mode"].value == "cog":
-            return self._cog(event, parameters, ret)
         return ret
 
     def finish(self, parameters=None):

@@ -1,6 +1,7 @@
 import json
 import logging
 from pathlib import Path
+from typing import Any
 
 from dranspose.event import ResultData
 from dranspose.parameters import StrParameter, BoolParameter
@@ -9,16 +10,27 @@ import h5py
 import numpy as np
 from datetime import datetime
 
+from pydantic import BaseModel
+
+from src.worker import WorkerResult, IncompatibleImages, CleanImage
+
 logger = logging.getLogger(__name__)
 
+class Accumulator(BaseModel):
+    image: CleanImage | None = None
+    number: int = 0
+
+    def add_image(self, image):
+        self.image = self.image + image
+        self.number += 1
+
+    def to_dict(self):
+        return {**self.image.to_dict(), "accumulated_number": self.number}
 
 class CmosReducer:
     @staticmethod
     def describe_parameters():
         params = [
-            StrParameter(name="filename"),
-            BoolParameter(name="pileup"),
-            StrParameter(name="scandir"),
             BoolParameter(name="integrate"),
         ]
         return params
@@ -26,56 +38,22 @@ class CmosReducer:
     def __init__(self, parameters=None, context=None, state=None, **kwargs):
         self._fh = None
         self.publish = {}
-        self.allsum = None
-        self.nimg = None
+
         self.pileup_filename = None
 
         self.state = state
 
-        self.cog_filename = None
         self.xye_dset = None
-
-        if "analysis_mode" in parameters:
-            analysis_mode = parameters["analysis_mode"].value
-        else:
-            analysis_mode = "roi"
 
         self.context = context
 
-        if "last" in context:
-            last = context["last"]
+        if "prev_accumulator" in context:
+            self.accum = context["prev_accumulator"]
         else:
-            last = np.zeros((100, 100))
-        self.publish = {"last": last, "cropped": None, "nint": 0, "roi_means": {}}
+            self.accum = Accumulator(image=CleanImage(image=np.zeros((100, 100))))
 
-        if analysis_mode == "sparsification":
-            self.publish = {"hits": {}}
-            try:
-                filename = parameters["filename"].value
-            except KeyError:
-                filename = None
-            size = parameters["spot_size"].value
-            logger.info("writing to file %s", filename)
-            self.dset = None
-            if filename:
-                if os.path.isfile(filename):
-                    self._fh = h5py.File(filename, "a")
-                    self.offsetdset = self._fh.get("sparse/offset")
-                    self.dset = self._fh.get("sparse/data")
-                else:
-                    self._fh = h5py.File(filename, "w")
-                    group = self._fh.create_group("sparse")
-                    self.offsetdset = group.create_dataset(
-                        "offset", (0, 3), maxshape=(None, 3), dtype=np.int16
-                    )
-                    self.dset = group.create_dataset(
-                        "data",
-                        (0, size, size),
-                        maxshape=(None, size, size),
-                        dtype=np.uint16,
-                    )
-                    self._offset_dset_name = "sparse/offset"
-                logger.info("opened file at %s", self._fh)
+        self.publish: dict[str, Any] = {"roi_means": {}}
+        self.publish.update(self.accum.to_dict())
 
         self.publish["sardana"] = {}
 
@@ -143,14 +121,19 @@ class CmosReducer:
             self._fh["raw_data"] = h5py.ExternalLink(self.cog_filename, "/")
 
     def process_result(self, result: ResultData, parameters=None):
-        if result.payload is None:
-            return
 
-        if "analysis_mode" in parameters:
-            analysis_mode = parameters["analysis_mode"].value
-        else:
-            analysis_mode = "roi"
+        res: WorkerResult = result.payload
 
+        if parameters["integrate"].value:
+            if res.image is not None:
+                try:
+                    self.accum.add_image(res.image)
+                except IncompatibleImages:
+                    self.accum = Accumulator(image=res.image)
+
+        self.publish.update(self.accum.to_dict())
+
+        return
         if "sardana" in result.payload:
             if result.payload["sardana"] is not None:
                 self.publish["sardana"][result.event_number] = result.payload[
@@ -225,10 +208,8 @@ class CmosReducer:
                     )
 
     def finish(self, parameters=None):
-        print(self.publish)
-        logger.info("finished reducer custom")
-        print(self.allsum)
-        if self.allsum is not None:
+        logger.info("finished reducer custom, %s", self.publish)
+        if False:
             try:
                 pileup = parameters["pileup"].value
             except Exception as e:
