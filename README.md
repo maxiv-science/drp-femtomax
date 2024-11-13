@@ -119,8 +119,28 @@ It reconstructs a "clean" image for further use with the same shape as the input
 ## Zyla 10
 As single photon detection is hard with the zyla, we only perform this in post-processing.
 
+To still accumulate images, we subtract the background value and apply a threshold. Every pixel below the threshold is set to 0.
 
+The output is of the same shape as the input.
+
+## Accumulation
+
+The image of either a processed cmos image or directly the Pilatus is then fed into an accumulation.
+If the accumulate property is true, it accumulates, otherwise it forwards the incoming image.
+On a change of shape, the accumulation is reset.
+
+As metadata, the image should expose the pixel size to distinguish the CMOS from the Pilatus and correctly draw q curves.
+
+## ROI Means
+Parallel to the accumulation, for every specified ROI, the mean is calculated and published matching the `x` axis from sardana.
 
 # Live Viewer
 
-max area filter
+The main live viewer will be based on the existing one which supports entry of detector position on the left and multiple ROIs on the right.
+The center displays the full image, optionally zoomed in to save transfer bandwidth.
+
+As iteractions it allows:
+- start/stop accumulation
+- add/delete/change ROIs
+- set detector position
+- Enable a max filter which enhances small single pixels which otherwise would disappear while rendering.
