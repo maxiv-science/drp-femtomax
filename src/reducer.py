@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 class Accumulator(BaseModel):
     image: CleanImage | None = None
-    number: int = 0
+    number: int = 1
 
     def add_image(self, image):
         self.image = self.image + image
@@ -52,7 +52,7 @@ class CmosReducer:
         else:
             self.accum = Accumulator(image=CleanImage(image=np.zeros((100, 100))))
 
-        self.publish: dict[str, Any] = {"roi_means": {}}
+        self.publish: dict[str, Any] = {"roi_means": {}, "max_e":[]}
         self.publish.update(self.accum.to_dict())
 
         self.publish["sardana"] = {}
@@ -124,14 +124,22 @@ class CmosReducer:
 
         res: WorkerResult = result.payload
 
-        if parameters["integrate"].value:
-            if res.image is not None:
-                try:
-                    self.accum.add_image(res.image)
-                except IncompatibleImages:
-                    self.accum = Accumulator(image=res.image)
+        if res.image is not None:
+            if parameters["integrate"].value:
+                    try:
+                        self.accum.add_image(res.image)
+                    except IncompatibleImages:
+                        self.accum = Accumulator(image=res.image)
+            else:
+                self.accum = Accumulator(image=res.image)
 
-        self.publish.update(self.accum.to_dict())
+            self.publish.update(self.accum.to_dict())
+
+        if len(res.photon_xye) > 0:
+            logger.info("photons %s", res.photon_xye)
+
+        if res.photon_e_max is not None:
+            self.publish["max_e"].append(res.photon_e_max)
 
         return
         if "sardana" in result.payload:

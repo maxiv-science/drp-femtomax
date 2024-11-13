@@ -31,8 +31,8 @@ def test_pipeline():
     f = h5pyd.File("http://localhost:5010/", "r")
     logging.info("file %s", list(f.keys()))
 
-    assert f["nint"][()] == 21
-    assert f["last"][10, 10] == 21
+    assert f["accumulated_number"][()] == 21
+    assert f["image"][10, 10] == 21
 
     stop_event.set()
 

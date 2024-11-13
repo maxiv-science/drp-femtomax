@@ -2,6 +2,8 @@ import itertools
 import logging
 import time
 from typing import Generator
+
+import h5py
 import numpy as np
 import pickle
 
@@ -15,13 +17,12 @@ logger = logging.getLogger(__name__)
 
 class BalorSource:  # Only works with old xes-receiver files
     def __init__(self) -> None:
-        self.images = np.ones((21, 4104, 4128), dtype=np.uint16)
-        # np.load("data/test-images.npz")["arr_0"]
+        pass
 
     def get_source_generators(
         self,
     ) -> list[Generator[InternalWorkerMessage, None, None]]:
-        return [self.balor_source(), self.sardana_file_source()]
+        return [self.balor_source()]
 
     def balor_source(self) -> Generator[InternalWorkerMessage, None, None]:
         msg_number = itertools.count(0)
@@ -29,7 +30,7 @@ class BalorSource:  # Only works with old xes-receiver files
         stins_start = (
             Stream1Start(
                 htype="header",
-                filename="automated-test.h5",
+                filename="balor-photons.h5",
                 msg_number=next(msg_number),
             )
             .model_dump_json()
@@ -46,33 +47,34 @@ class BalorSource:  # Only works with old xes-receiver files
         logger.debug(f"Sending {start=}")
         yield start
 
-        frameno = 0
-        for image in self.images:
-            stins = (
-                Stream1Data(
-                    htype="image",
-                    msg_number=next(msg_number),
-                    frame=frameno,
-                    shape=image.shape,
-                    compression="none",
-                    type=str(image.dtype),
-                )
-                .model_dump_json()
-                .encode()
-            )
-            dat = image
-            img = InternalWorkerMessage(
-                event_number=EventNumber(frameno + 1),
-                streams={
-                    StreamName("andor3_balor"): StreamData(
-                        typ="STINS", frames=[stins, dat.tobytes()]
+        with h5py.File("data/scan-103327_andor3_balor.h5") as fh:
+            frameno = 0
+            for image in fh["/entry/instrument/balor/data"][:10]:
+                stins = (
+                    Stream1Data(
+                        htype="image",
+                        msg_number=next(msg_number),
+                        frame=frameno,
+                        shape=image.shape,
+                        compression="none",
+                        type=str(image.dtype),
                     )
-                },
-            )
-            yield img
-            frameno += 1
-            time.sleep(0.1)
-            # logger.debug(f"Sending {img=}")
+                    .model_dump_json()
+                    .encode()
+                )
+                dat = image
+                img = InternalWorkerMessage(
+                    event_number=EventNumber(frameno + 1),
+                    streams={
+                        StreamName("andor3_balor"): StreamData(
+                            typ="STINS", frames=[stins, dat.tobytes()]
+                        )
+                    },
+                )
+                yield img
+                frameno += 1
+                time.sleep(0.1)
+                # logger.debug(f"Sending {img=}")
 
         stins_end = (
             Stream1End(htype="series_end", msg_number=next(msg_number))
@@ -88,15 +90,3 @@ class BalorSource:  # Only works with old xes-receiver files
         logger.debug(f"Sending {end=}")
         yield end
 
-    def sardana_file_source(self):
-        with open(
-            "data/fullimgsardana-ingester-cf9c9d60-6509-4ce3-a721-f01b4d328d9f.pkls",
-            "rb",
-        ) as f:
-            while True:
-                try:
-                    msg = pickle.load(f)
-                    assert isinstance(msg, InternalWorkerMessage)
-                    yield msg
-                except EOFError:
-                    break
