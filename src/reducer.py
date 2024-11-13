@@ -37,7 +37,6 @@ class CmosReducer:
 
     def __init__(self, parameters=None, context=None, state=None, **kwargs):
         self._fh = None
-        self.publish = {}
 
         self.pileup_filename = None
 
@@ -133,6 +132,7 @@ class CmosReducer:
             else:
                 self.accum = Accumulator(image=res.image)
 
+            self.context["prev_accumulator"] = self.accum
             self.publish.update(self.accum.to_dict())
 
         if len(res.photon_xye) > 0:
@@ -140,6 +140,9 @@ class CmosReducer:
 
         if res.photon_e_max is not None:
             self.publish["max_e"].append(res.photon_e_max)
+
+        if res.sardana:
+            logger.info("sardana %s", res.sardana)
 
         return
         if "sardana" in result.payload:
@@ -154,26 +157,6 @@ class CmosReducer:
         if "cog_filename" in result.payload:
             self._setup_cog_file(result, parameters)
 
-        # if analysis_mode == "roi":
-        if "img" in result.payload:
-            img = result.payload["img"]
-
-            if parameters["integrate"].value:
-                if self.publish["last"].shape != img.shape:
-                    self.publish["last"] = img
-                    self.context["last"] = img
-                    self.publish["nint"] = 1
-                else:
-                    self.publish["last"] = self.publish["last"] + img
-                    self.context["last"] = self.publish["last"]
-                    self.publish["nint"] += 1
-            else:
-                self.publish["last"] = img
-                self.context["last"] = img
-                self.publish["nint"] = 1
-            if "roi_means" in result.payload:
-                mean = result.payload["roi_means"]
-                self.publish["roi_means"][result.event_number] = mean
 
             if self.allsum is None:
                 self.allsum = img

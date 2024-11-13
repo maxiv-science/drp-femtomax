@@ -31,6 +31,8 @@ class CleanImage(BaseModel):
     crop_bottom: int = 0
     crop_left: int = 0
 
+    pixel_size: float | None = None # in meters, we assume square pixels
+
     def set_crop_for_slices(self, orig: np.ndarray, slices: tuple[slice, slice]):
         self.crop_top = slices[0].start
         self.crop_bottom = orig.shape[0]-slices[0].stop
@@ -45,7 +47,10 @@ class CleanImage(BaseModel):
         raise IncompatibleImages(f"image of shape {self.image.shape} is incompatible with {other.image.shape}")
 
     def to_dict(self):
-        return {"image":self.image, "crop": {n[5:]: val for n, val in self.__dict__.items() if n.startswith("crop_")}  }
+        r = {"image":self.image, "crop": {n[5:]: val for n, val in self.__dict__.items() if n.startswith("crop_")}}
+        if self.pixel_size is not None:
+            r["pixel_size"] = [self.pixel_size, self.pixel_size]
+        return r
 
 class WorkerResult(BaseModel):
     sardana: SardanaDataDescription | None = None
@@ -171,7 +176,7 @@ class CmosWorker:
 
                     for hit in hits:
                         clean[int(hit[0]), int(hit[1])] += 1
-                    clean_image = CleanImage(image=clean)
+                    clean_image = CleanImage(image=clean, pixel_size=12e-6)
                     clean_image.set_crop_for_slices(data.data, roi)
                     logger.info("in worker is %s", clean_image)
                     ret.photon_xye = [(x+clean_image.crop_top, y+clean_image.crop_left, e) for x,y,e in hits]
@@ -182,19 +187,19 @@ class CmosWorker:
                 if isinstance(data, Stream1Data):
                     cmos_background = parameters["cmos_background"].value
                     cmos_threshold = parameters["cmos_threshold"].value
-                    clean_image = CleanImage(image=self.process_cmos(data.data, cmos_background, cmos_threshold))
+                    clean_image = CleanImage(image=self.process_cmos(data.data, cmos_background, cmos_threshold), pixel_size=12e-6)
 
         elif "andor3_zyla10" in event.streams:
             data = parse(event.streams["andor3_zyla10"])
             if isinstance(data, Stream1Data):
                 cmos_background = parameters["cmos_background"].value
                 cmos_threshold = parameters["cmos_threshold"].value
-                clean_image = CleanImage(image=self.process_cmos(data.data, cmos_background, cmos_threshold))
+                clean_image = CleanImage(image=self.process_cmos(data.data, cmos_background, cmos_threshold), pixel_size=5.5e-6)
 
         elif "pilatus" in event.streams:
             data = parse(event.streams["pilatus"])
             if isinstance(data, Stream1Data):
-                clean_image = CleanImage(image=data.data)
+                clean_image = CleanImage(image=data.data, pixel_size=172e-6)
 
         if clean_image is not None:
             ret.image = clean_image
