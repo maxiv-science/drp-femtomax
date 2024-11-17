@@ -47,7 +47,7 @@ class BalorSource:  # Only works with old xes-receiver files
         yield start
 
         frameno = 0
-        for image in [self.image]*21:
+        for image in [self.image] * 21:
             stins = (
                 Stream1Data(
                     htype="image",

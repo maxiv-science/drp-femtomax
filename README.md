@@ -6,7 +6,7 @@ Provide the classes for the worker and reducer as well as the ingester files.
 Optionally parameters may be provided in json or pickle format.
 
    dranspose replay -w "src.worker:FluorescenceWorker" -r "src.reducer:FluorescenceReducer" -f ../contrast_ingest.pkls ../xspress_ingest.pkls -p ../params.json
- 
+
 
 # Femtomax Analysis Modes
 
@@ -38,18 +38,18 @@ The x-ray Zyla is used to monitor the position or intensity of a bragg peak.
 Sometimes, the Pilatus is used to measure the same, so the analysis has to work with CMOS and photon counting data.
 
 ### Cluster Analysis
-For CMOS data, there exists a background noise which needs to be subtracted by using a dark frame. 
+For CMOS data, there exists a background noise which needs to be subtracted by using a dark frame.
 Fortunately, every pixel fluctuates normally distributed with a mean of 100, which allows us to use a uniform 100 value as dark frame.
 After background subtraction, we apply a threshold (default 12 for the Zyla) and only use pixels with a value above the threshold.
 
-On this final image, or the direct image from the Pilatus, we take the mean value for multiple rectangulat ROIs. 
+On this final image, or the direct image from the Pilatus, we take the mean value for multiple rectangulat ROIs.
 These means are then exposed over time or if available the scan motor.
 
 If the signal is very weak, the finale image needs to be accumulated.
 
 ### Live Viewing
 
-The accumulated image is shown with the ability to draw ROIs. 
+The accumulated image is shown with the ability to draw ROIs.
 If ROIs are set, the time/motor positoin dependent scalar means are shown in a default live viewer.
 
 ## Single Photon Detection on Balor

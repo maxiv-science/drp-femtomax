@@ -7,44 +7,55 @@ import time
 import h5pyd
 from dranspose.replay import replay
 
-def test_direct(tmp_path):
 
-    roi_data = {'photon': {'visible': True,
-          'type': 'RectangleROI',
-          'handles': {'_handleTopLeft': [0.0, 70.89219330855019],
-           '_handleTopRight': [2001.11524163568774, 3000.89219330855019],
-           '_handleBottomLeft': [1500.0, 1500.0],
-           '_handleBottomRight': [81.11524163568774, 0.0],
-           '_handleCenter': [40.55762081784387, 35.446096654275095],
-           '_handleLabel': [0.0, 0.0]}}
-            }
+def test_direct(tmp_path):
+    roi_data = {
+        "photon": {
+            "visible": True,
+            "type": "RectangleROI",
+            "handles": {
+                "_handleTopLeft": [0.0, 70.89219330855019],
+                "_handleTopRight": [2001.11524163568774, 3000.89219330855019],
+                "_handleBottomLeft": [1500.0, 1500.0],
+                "_handleBottomRight": [81.11524163568774, 0.0],
+                "_handleCenter": [40.55762081784387, 35.446096654275095],
+                "_handleLabel": [0.0, 0.0],
+            },
+        }
+    }
 
     params = [{"name": "rois", "data": json.dumps(roi_data)}]
     param_file = tmp_path / "params.json"
     with open(param_file, "w") as f:
         json.dump(params, f)
 
-    replay("src.worker:CmosWorker",
-        "src.reducer:CmosReducer",
-        None,
-        "src.photon_source:BalorSource",
-        param_file)
-
-def test_non_photon (tmp_path):
-
-
-    params = [{"name": "cmos_background", "data": "100"},
-              {"name": "cmos_threshold", "data": "15"}]
-    param_file = tmp_path / "params.json"
-    with open(param_file, "w") as f:
-        json.dump(params, f)
-
-    replay("src.worker:CmosWorker",
+    replay(
+        "src.worker:CmosWorker",
         "src.reducer:CmosReducer",
         None,
         "src.photon_source:BalorSource",
         param_file,
-           port=5010)
+    )
+
+
+def test_non_photon(tmp_path):
+    params = [
+        {"name": "cmos_background", "data": "100"},
+        {"name": "cmos_threshold", "data": "15"},
+    ]
+    param_file = tmp_path / "params.json"
+    with open(param_file, "w") as f:
+        json.dump(params, f)
+
+    replay(
+        "src.worker:CmosWorker",
+        "src.reducer:CmosReducer",
+        None,
+        "src.photon_source:BalorSource",
+        param_file,
+        port=5010,
+    )
+
 
 def est_pipeline():
     stop_event = threading.Event()
@@ -79,16 +90,20 @@ def est_pipeline():
 
 
 def est_live(tmp_path):
-
-    roi_data = {'photon': {'visible': True,
-          'type': 'RectangleROI',
-          'handles': {'_handleTopLeft': [0.0, 70.89219330855019],
-           '_handleTopRight': [2001.11524163568774, 3000.89219330855019],
-           '_handleBottomLeft': [1500.0, 1500.0],
-           '_handleBottomRight': [81.11524163568774, 0.0],
-           '_handleCenter': [40.55762081784387, 35.446096654275095],
-           '_handleLabel': [0.0, 0.0]}}
-            }
+    roi_data = {
+        "photon": {
+            "visible": True,
+            "type": "RectangleROI",
+            "handles": {
+                "_handleTopLeft": [0.0, 70.89219330855019],
+                "_handleTopRight": [2001.11524163568774, 3000.89219330855019],
+                "_handleBottomLeft": [1500.0, 1500.0],
+                "_handleBottomRight": [81.11524163568774, 0.0],
+                "_handleCenter": [40.55762081784387, 35.446096654275095],
+                "_handleLabel": [0.0, 0.0],
+            },
+        }
+    }
 
     params = [{"name": "rois", "data": json.dumps(roi_data)}]
     param_file = tmp_path / "params.json"

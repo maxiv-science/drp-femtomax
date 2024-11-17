@@ -51,7 +51,7 @@ class BalorSource:  # Only works with old xes-receiver files
             frameno = 0
             dset = fh["/entry/instrument/balor/data"]
             for image_idx in range(10):
-                image = dset[image_idx%dset.shape[0]][:]
+                image = dset[image_idx % dset.shape[0]][:]
                 stins = (
                     Stream1Data(
                         htype="image",
@@ -91,4 +91,3 @@ class BalorSource:  # Only works with old xes-receiver files
         )
         logger.debug(f"Sending {end=}")
         yield end
-

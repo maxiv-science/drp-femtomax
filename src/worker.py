@@ -33,26 +33,44 @@ class CleanImage(BaseModel):
     crop_bottom: int = 0
     crop_left: int = 0
 
-    pixel_size: float | None = None # in meters, we assume square pixels
+    pixel_size: float | None = None  # in meters, we assume square pixels
 
     def set_crop_for_slices(self, orig: np.ndarray, slices: tuple[slice, slice]):
         self.crop_top = slices[0].start
-        self.crop_bottom = orig.shape[0]-slices[0].stop
+        self.crop_bottom = orig.shape[0] - slices[0].stop
         self.crop_left = slices[1].start
         self.crop_right = orig.shape[1] - slices[1].stop
 
     def __add__(self, other: "CleanImage") -> "CleanImage":
         if self.image.shape == other.image.shape:
-            if self.crop_top == other.crop_top and self.crop_right == other.crop_right and self.crop_bottom == other.crop_bottom and self.crop_left == other.crop_left:
-                return CleanImage(image=self.image + other.image, crop_top=self.crop_top, crop_right=self.crop_right,
-                                  crop_bottom=self.crop_bottom, crop_left=self.crop_left)
-        raise IncompatibleImages(f"image of shape {self.image.shape} is incompatible with {other.image.shape}")
+            if (
+                self.crop_top == other.crop_top
+                and self.crop_right == other.crop_right
+                and self.crop_bottom == other.crop_bottom
+                and self.crop_left == other.crop_left
+            ):
+                return CleanImage(
+                    image=self.image + other.image,
+                    crop_top=self.crop_top,
+                    crop_right=self.crop_right,
+                    crop_bottom=self.crop_bottom,
+                    crop_left=self.crop_left,
+                )
+        raise IncompatibleImages(
+            f"image of shape {self.image.shape} is incompatible with {other.image.shape}"
+        )
 
     def to_dict(self):
-        r = {"image":self.image, "crop": {n[5:]: val for n, val in self.__dict__.items() if n.startswith("crop_")}}
+        r = {
+            "image": self.image,
+            "crop": {
+                n[5:]: val for n, val in self.__dict__.items() if n.startswith("crop_")
+            },
+        }
         if self.pixel_size is not None:
             r["pixel_size"] = [self.pixel_size, self.pixel_size]
         return r
+
 
 class WorkerResult(BaseModel):
     sardana: SardanaDataDescription | None = None
@@ -72,15 +90,25 @@ class CmosWorker:
     @staticmethod
     def describe_parameters():
         params = [
-            IntParameter(name="cmos_background", default=100, description="The initial background subtraction, similar to a dark image"),
-            IntParameter(name="cmos_threshold", default=12, description="Only consider values above this threshold"),
             IntParameter(
-                name="threshold_counting", default=108,
-                description="important threshold for counting photons later (this is with background)"
+                name="cmos_background",
+                default=100,
+                description="The initial background subtraction, similar to a dark image",
             ),
             IntParameter(
-                name="pre_threshold", default=1100,
-                description="discard every spot with a total energy below that"
+                name="cmos_threshold",
+                default=12,
+                description="Only consider values above this threshold",
+            ),
+            IntParameter(
+                name="threshold_counting",
+                default=108,
+                description="important threshold for counting photons later (this is with background)",
+            ),
+            IntParameter(
+                name="pre_threshold",
+                default=1100,
+                description="discard every spot with a total energy below that",
             ),
             StrParameter(name="rois", default="{}"),
         ]
@@ -91,7 +119,7 @@ class CmosWorker:
         self.accum = None
 
     def _cog(self, event, parameters, ret):
-        if isinstance(dat, Stream1Start):
+        if isinstance(event, Stream1Start):
             if isinstance(ret["sardana"], SardanaDataDescription):
                 print("sardana start is", ret["sardana"])
                 dstname = os.path.join(ret["sardana"].scandir, "process", "photoncount")
@@ -101,7 +129,6 @@ class CmosWorker:
                         dstname = os.path.join(dstname, name)
                         break
                 return {**ret, "cog_filename": dstname}
-
 
     def photonize(self, img, threshold_counting, pre_threshold):
         """
@@ -116,7 +143,7 @@ class CmosWorker:
         positions = np.asarray(fullframe > 0).nonzero()
         hits = set()
         for x, y in zip(*positions):
-            small = fullframe[x - 1: x + 2, y - 1: y + 2]
+            small = fullframe[x - 1 : x + 2, y - 1 : y + 2]
             if np.prod(small.shape) == 0:
                 continue
 
@@ -124,7 +151,7 @@ class CmosWorker:
             hits.add((x + maxpos[0] - 1, y + maxpos[1] - 1))
         pos = []
         for x, y in hits:
-            hit = fullframe[x - 1: x + 2, y - 1: y + 2]
+            hit = fullframe[x - 1 : x + 2, y - 1 : y + 2]
             d1 = hit.sum()
             cm = center_of_mass(hit)
             pos.append((x + cm[0] - 1, y + cm[1] - 1, d1))
@@ -135,7 +162,9 @@ class CmosWorker:
         dark_corr[dark_corr < cmos_threshold] = 0
         return dark_corr
 
-    def process_event(self, event: EventData, parameters=None, tick=False, *args, **kwargs):
+    def process_event(
+        self, event: EventData, parameters=None, tick=False, *args, **kwargs
+    ):
         ret = WorkerResult()
         if "sardana" in event.streams:
             ret.sardana = sardana_parse(event.streams["sardana"])
@@ -164,15 +193,22 @@ class CmosWorker:
                     clean_image = CleanImage(image=clean, pixel_size=12e-6)
                     clean_image.set_crop_for_slices(data.data, roi)
                     logger.info("in worker is %s", clean_image)
-                    ret.photon_xye = [(x+clean_image.crop_top, y+clean_image.crop_left, e) for x,y,e in hits]
-                    ret.photon_e_max = max([0]+[e for _,_,e in hits])
-
+                    ret.photon_xye = [
+                        (x + clean_image.crop_top, y + clean_image.crop_left, e)
+                        for x, y, e in hits
+                    ]
+                    ret.photon_e_max = max([0] + [e for _, _, e in hits])
 
             else:
                 if isinstance(data, Stream1Data):
                     cmos_background = parameters["cmos_background"].value
                     cmos_threshold = parameters["cmos_threshold"].value
-                    clean_image = CleanImage(image=self.process_cmos(data.data, cmos_background, cmos_threshold), pixel_size=12e-6)
+                    clean_image = CleanImage(
+                        image=self.process_cmos(
+                            data.data, cmos_background, cmos_threshold
+                        ),
+                        pixel_size=12e-6,
+                    )
                     ret.frame_no = data.frame
 
         elif "andor3_zyla10" in event.streams:
@@ -180,7 +216,10 @@ class CmosWorker:
             if isinstance(data, Stream1Data):
                 cmos_background = parameters["cmos_background"].value
                 cmos_threshold = parameters["cmos_threshold"].value
-                clean_image = CleanImage(image=self.process_cmos(data.data, cmos_background, cmos_threshold), pixel_size=5.5e-6)
+                clean_image = CleanImage(
+                    image=self.process_cmos(data.data, cmos_background, cmos_threshold),
+                    pixel_size=5.5e-6,
+                )
                 ret.frame_no = data.frame
 
         elif "pilatus" in event.streams:

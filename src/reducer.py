@@ -18,6 +18,7 @@ from src.worker import WorkerResult, IncompatibleImages, CleanImage
 
 logger = logging.getLogger(__name__)
 
+
 class Accumulator(BaseModel):
     image: CleanImage | None = None
     number: int = 1
@@ -28,6 +29,7 @@ class Accumulator(BaseModel):
 
     def to_dict(self):
         return {**self.image.to_dict(), "accumulated_number": self.number}
+
 
 class CmosReducer:
     @staticmethod
@@ -57,7 +59,7 @@ class CmosReducer:
         else:
             self.accum = Accumulator(image=CleanImage(image=np.zeros((100, 100))))
 
-        self.publish: dict[str, Any] = {"roi_means": {}, "max_e":[]}
+        self.publish: dict[str, Any] = {"roi_means": {}, "max_e": []}
         self.publish.update(self.accum.to_dict())
 
         self.publish["sardana"] = {}
@@ -69,8 +71,8 @@ class CmosReducer:
                 # fn = "./process/photoncount/testoutput.h5"
                 path, fname = os.path.split(filename)
                 root = os.path.splitext(fname)[0]
-                fname = '%s_integrated.h5' % root
-                output_folder = path.replace('raw', 'process/xye')
+                fname = "%s_integrated.h5" % root
+                output_folder = path.replace("raw", "process/xye")
                 if output_folder != "":
                     os.makedirs(os.path.dirname(output_folder), exist_ok=True)
                 output_filename = os.path.join(output_folder, fname)
@@ -120,8 +122,17 @@ class CmosReducer:
                 )
                 self._fh["raw_data"] = h5py.ExternalLink(filename, "/")
 
-    def process_result(self, result: ResultData, parameters=None):
+    def write_xye(self, frame_no, photon_xye):
+        hits_fr = [frame_no] * len(photon_xye)
+        with self.fh_lock:
+            if self.xye_dset is not None:
+                oldsize = self.xye_dset.shape[0]
+                self.xye_dset.resize(oldsize + len(hits_fr), axis=0)
+                self.fr_dset.resize(oldsize + len(hits_fr), axis=0)
+                self.xye_dset[oldsize : oldsize + len(hits_fr), :] = photon_xye
+                self.fr_dset[oldsize : oldsize + len(hits_fr)] = hits_fr
 
+    def process_result(self, result: ResultData, parameters=None):
         res: WorkerResult = result.payload
 
         if res.image is not None:
@@ -152,16 +163,7 @@ class CmosReducer:
 
         if len(res.photon_xye) > 0:
             logger.debug("photons %s", res.photon_xye)
-            hits_fr = [res.frame_no] * len(res.photon_xye)
-
-            with self.fh_lock:
-                if self.xye_dset is not None:
-                    oldsize = self.xye_dset.shape[0]
-                    self.xye_dset.resize(oldsize + len(hits_fr), axis=0)
-                    self.fr_dset.resize(oldsize + len(hits_fr), axis=0)
-                    self.xye_dset[oldsize: oldsize + len(hits_fr), :] = res.photon_xye
-                    self.fr_dset[oldsize: oldsize + len(hits_fr)] = hits_fr
-
+            self.write_xye(res.frame_no, res.photon_xye)
 
         if res.photon_e_max is not None:
             self.publish["max_e"].append(res.photon_e_max)
@@ -174,7 +176,7 @@ class CmosReducer:
                 self.publish["roi_means"][roi] = []
             cur_len = len(self.publish["roi_means"][roi])
             if cur_len <= res.frame_no:
-                self.publish["roi_means"][roi] += [0]*(res.frame_no-cur_len+1)
+                self.publish["roi_means"][roi] += [0] * (res.frame_no - cur_len + 1)
             self.publish["roi_means"][roi][res.frame_no] = res.means[roi]
 
         return
@@ -184,8 +186,7 @@ class CmosReducer:
                     "sardana"
                 ].model_dump()
 
-
-        elif analysis_mode == "cog":
+        elif "as" == "cog":
             if "reconstructed" in result.payload:
                 if self._fh is not None:
                     self._fh["hits"].create_dataset(
