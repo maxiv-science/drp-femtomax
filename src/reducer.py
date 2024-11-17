@@ -67,9 +67,15 @@ class CmosReducer:
             if self._fh is None:
                 logger.info("write to %s", filename)
                 # fn = "./process/photoncount/testoutput.h5"
-                proc_filename = "process/test.h5"
-                os.makedirs(os.path.dirname(proc_filename), exist_ok=True)
-                self._fh = h5py.File(proc_filename, "w")
+                path, fname = os.path.split(filename)
+                root = os.path.splitext(fname)[0]
+                fname = '%s_integrated.h5' % root
+                output_folder = path.replace('raw', 'process/xye')
+                if output_folder != "":
+                    os.makedirs(os.path.dirname(output_folder), exist_ok=True)
+                output_filename = os.path.join(output_folder, fname)
+
+                self._fh = h5py.File(output_filename, "w")
                 group = self._fh.create_group("hits")
                 threshold_counting = parameters["threshold_counting"].value
                 pre_threshold = parameters["pre_threshold"].value
