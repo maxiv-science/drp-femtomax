@@ -15,6 +15,8 @@ from numpy import unravel_index
 from pydantic import BaseModel, ConfigDict
 from scipy.ndimage import gaussian_filter, center_of_mass
 
+from src.utils import parse_rois
+
 logger = logging.getLogger(__name__)
 
 
@@ -59,6 +61,7 @@ class WorkerResult(BaseModel):
     photon_filename: str | None = None
     photon_xye: list[tuple[float, float, float]] = []
     photon_e_max: float | None = None
+    frame_no: int | None = None
 
 
 class TooManyPhotons(Exception):
@@ -100,22 +103,6 @@ class CmosWorker:
                 return {**ret, "cog_filename": dstname}
 
 
-    def parse_rois(self, parameters):
-        slice_rois = {}
-        try:
-            rois = json.loads(parameters["rois"].value)
-            for roi_name in rois:
-                tl = rois[roi_name]["handles"]["_handleBottomLeft"]
-                br = rois[roi_name]["handles"]["_handleTopRight"]
-
-                xslice = slice(min(int(tl[0]), int(br[0])), max(int(tl[0]), int(br[0])))
-                yslice = slice(min(int(tl[1]), int(br[1])), max(int(tl[1]), int(br[1])))
-
-                slice_rois[roi_name] = np.s_[yslice, xslice]
-        except Exception:
-            pass
-        return slice_rois
-
     def photonize(self, img, threshold_counting, pre_threshold):
         """
         This is the magic function that counts the photons using a 3x3 square (you can change the size of the box)
@@ -153,7 +140,7 @@ class CmosWorker:
         if "sardana" in event.streams:
             ret.sardana = sardana_parse(event.streams["sardana"])
 
-        rois = self.parse_rois(parameters)
+        rois = parse_rois(parameters)
 
         clean_image = None
         if "andor3_balor" in event.streams:
@@ -162,11 +149,9 @@ class CmosWorker:
             if "photon" in rois:
                 if isinstance(data, Stream1Start):
                     if data.filename != "":
-                        parts = os.path.split(data.filename)
-                        logger.info("filename parts are %s", parts)
-                        #ret.photon_filename =
-                # TODO: if image, process roi and place into clean image
+                        ret.photon_filename = data.filename
                 if isinstance(data, Stream1Data):
+                    ret.frame_no = data.frame
                     roi = rois["photon"]
                     crop = data.data[roi]
                     threshold_counting = parameters["threshold_counting"].value
@@ -188,6 +173,7 @@ class CmosWorker:
                     cmos_background = parameters["cmos_background"].value
                     cmos_threshold = parameters["cmos_threshold"].value
                     clean_image = CleanImage(image=self.process_cmos(data.data, cmos_background, cmos_threshold), pixel_size=12e-6)
+                    ret.frame_no = data.frame
 
         elif "andor3_zyla10" in event.streams:
             data = parse(event.streams["andor3_zyla10"])
@@ -195,11 +181,13 @@ class CmosWorker:
                 cmos_background = parameters["cmos_background"].value
                 cmos_threshold = parameters["cmos_threshold"].value
                 clean_image = CleanImage(image=self.process_cmos(data.data, cmos_background, cmos_threshold), pixel_size=5.5e-6)
+                ret.frame_no = data.frame
 
         elif "pilatus" in event.streams:
             data = parse(event.streams["pilatus"])
             if isinstance(data, Stream1Data):
                 clean_image = CleanImage(image=data.data, pixel_size=172e-6)
+                ret.frame_no = data.frame
 
         if clean_image is not None:
             ret.image = clean_image

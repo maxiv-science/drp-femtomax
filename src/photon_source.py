@@ -47,9 +47,11 @@ class BalorSource:  # Only works with old xes-receiver files
         logger.debug(f"Sending {start=}")
         yield start
 
-        with h5py.File("data/scan-103327_andor3_balor.h5") as fh:
+        with h5py.File("data/scan-103327_small.h5") as fh:
             frameno = 0
-            for image in fh["/entry/instrument/balor/data"][:10]:
+            dset = fh["/entry/instrument/balor/data"]
+            for image_idx in range(10):
+                image = dset[image_idx%dset.shape[0]][:]
                 stins = (
                     Stream1Data(
                         htype="image",
