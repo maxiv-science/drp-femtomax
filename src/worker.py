@@ -218,7 +218,7 @@ class CmosWorker:
                 cmos_threshold = parameters["cmos_threshold"].value
                 clean_image = CleanImage(
                     image=self.process_cmos(data.data, cmos_background, cmos_threshold),
-                    pixel_size=5.5e-6,
+                    pixel_size=6.5e-6,
                 )
                 ret.frame_no = data.frame
 
@@ -226,6 +226,17 @@ class CmosWorker:
             data = parse(event.streams["pilatus"])
             if isinstance(data, Stream1Data):
                 clean_image = CleanImage(image=data.data, pixel_size=172e-6)
+                ret.frame_no = data.frame
+
+        elif "andor3_zyla12" in event.streams:
+            data = parse(event.streams["andor3_zyla12"])
+            if isinstance(data, Stream1Data):
+                cmos_background = parameters["cmos_background"].value
+                cmos_threshold = parameters["cmos_threshold"].value
+                clean_image = CleanImage(
+                    image=self.process_cmos(data.data, cmos_background, cmos_threshold),
+                    pixel_size=6.5e-6,
+                )
                 ret.frame_no = data.frame
 
         if clean_image is not None:
