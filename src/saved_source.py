@@ -1,5 +1,6 @@
 import itertools
 import logging
+import time
 from typing import Generator
 import numpy as np
 import pickle
@@ -14,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 class BalorSource:  # Only works with old xes-receiver files
     def __init__(self) -> None:
-        self.images = np.ones((21, 4104, 4128), dtype=np.uint16)
+        self.image = np.ones((4104, 4128), dtype=np.uint16) * 113
         # np.load("data/test-images.npz")["arr_0"]
 
     def get_source_generators(
@@ -46,7 +47,7 @@ class BalorSource:  # Only works with old xes-receiver files
         yield start
 
         frameno = 0
-        for image in self.images:
+        for image in [self.image] * 21:
             stins = (
                 Stream1Data(
                     htype="image",
@@ -70,6 +71,7 @@ class BalorSource:  # Only works with old xes-receiver files
             )
             yield img
             frameno += 1
+            time.sleep(0.1)
             # logger.debug(f"Sending {img=}")
 
         stins_end = (
