@@ -21,7 +21,7 @@ class BalorSource:  # Only works with old xes-receiver files
     def get_source_generators(
         self,
     ) -> list[Generator[InternalWorkerMessage, None, None]]:
-        return [self.balor_source(), self.sardana_file_source()]
+        return [self.balor_source()]  # , self.sardana_file_source()]
 
     def balor_source(self) -> Generator[InternalWorkerMessage, None, None]:
         msg_number = itertools.count(0)

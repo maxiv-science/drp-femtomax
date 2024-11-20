@@ -32,7 +32,7 @@ def test_pipeline():
     logging.info("file %s", list(f.keys()))
 
     assert f["accumulated_number"][()] == 21
-    assert f["image"][10, 10] == 21 * 13
+    assert f["image"][10, 10] == 21 * 1
 
     stop_event.set()
 

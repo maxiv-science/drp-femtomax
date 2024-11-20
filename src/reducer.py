@@ -5,6 +5,7 @@ from threading import Lock
 from typing import Any
 
 from dranspose.event import ResultData
+from dranspose.data.sardana import SardanaDataDescription, SardanaRecordData
 from dranspose.parameters import StrParameter, BoolParameter
 import os
 import h5py
@@ -54,12 +55,16 @@ class CmosReducer:
 
         self.context = context
 
+        self.ref_movable = None
+
+        self.movable_positions = {}
+
         if "prev_accumulator" in context:
             self.accum = context["prev_accumulator"]
         else:
             self.accum = Accumulator(image=CleanImage(image=np.zeros((100, 100))))
 
-        self.publish: dict[str, Any] = {"roi_means": {}, "max_e": []}
+        self.publish: dict[str, Any] = {"roi_means": {}, "step_means": {}, "max_e": []}
         self.publish.update(self.accum.to_dict())
 
         self.publish["sardana"] = {}
@@ -132,6 +137,41 @@ class CmosReducer:
                 self.xye_dset[oldsize : oldsize + len(hits_fr), :] = photon_xye
                 self.fr_dset[oldsize : oldsize + len(hits_fr)] = hits_fr
 
+    def _update_rois(self, res):
+        for roi in res.means:
+            if roi not in self.publish["roi_means"]:
+                self.publish["roi_means"][roi] = []
+            cur_len = len(self.publish["roi_means"][roi])
+            if cur_len <= res.frame_no:
+                self.publish["roi_means"][roi] += [0] * (res.frame_no - cur_len + 1)
+            self.publish["roi_means"][roi][res.frame_no] = res.means[roi]
+
+            if roi not in self.publish["step_means"]:
+                self.publish["step_means"][roi] = {
+                    "y": [],
+                    "y_errors": [],
+                    "x": [],
+                    "x_attrs": {"long_name": self.ref_movable},
+                }
+                self.publish["step_means"][roi + "_attrs"] = {
+                    "NX_class": "NXdata",
+                    "signal": "y",
+                    "axes": ["x"],
+                }
+            last = 0
+            for pnum, pos in enumerate(self.movable_positions):
+                if pnum < len(self.publish["step_means"][roi]["y"]):
+                    last = pos + 1
+                    continue
+                use = self.publish["roi_means"][roi][last : pos + 1]
+                logger.info("use to mean for pos %s: %s", pos, use)
+                mean = np.mean(use)
+                std = np.std(use)
+                self.publish["step_means"][roi]["y"].append(mean)
+                self.publish["step_means"][roi]["y_errors"].append(std)
+                self.publish["step_means"][roi]["x"].append(self.movable_positions[pos])
+                last = pos + 1
+
     def process_result(self, result: ResultData, parameters=None):
         res: WorkerResult = result.payload
 
@@ -169,29 +209,20 @@ class CmosReducer:
             self.publish["max_e"].append(res.photon_e_max)
 
         if res.sardana:
-            logger.info("sardana %s", res.sardana)
-
-        for roi in res.means:
-            if roi not in self.publish["roi_means"]:
-                self.publish["roi_means"][roi] = []
-            cur_len = len(self.publish["roi_means"][roi])
-            if cur_len <= res.frame_no:
-                self.publish["roi_means"][roi] += [0] * (res.frame_no - cur_len + 1)
-            self.publish["roi_means"][roi][res.frame_no] = res.means[roi]
-
-        return
-        if "sardana" in result.payload:
-            if result.payload["sardana"] is not None:
-                self.publish["sardana"][result.event_number] = result.payload[
-                    "sardana"
-                ].model_dump()
-
-        elif "as" == "cog":
-            if "reconstructed" in result.payload:
-                if self._fh is not None:
-                    self._fh["hits"].create_dataset(
-                        "image", data=result.payload["reconstructed"]
+            if isinstance(res.sardana, SardanaDataDescription):
+                logger.info("start of sardana movable: %s", res.sardana.ref_moveables)
+                if len(res.sardana.ref_moveables) > 0:
+                    self.ref_movable = res.sardana.ref_moveables[0]
+            if isinstance(res.sardana, SardanaRecordData):
+                if self.ref_movable is not None:
+                    logger.info(
+                        "got position %s", getattr(res.sardana, self.ref_movable)
                     )
+                    self.movable_positions[res.frame_no] = getattr(
+                        res.sardana, self.ref_movable
+                    )
+
+        self._update_rois(res)
 
     def finish(self, parameters=None):
         logger.info("finished reducer custom")

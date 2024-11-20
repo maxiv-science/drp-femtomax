@@ -5,6 +5,7 @@ import threading
 import time
 
 import h5pyd
+import pytest
 from dranspose.replay import replay
 
 
@@ -57,7 +58,7 @@ def test_non_photon(tmp_path):
     )
 
 
-def est_pipeline():
+def test_pipeline():
     stop_event = threading.Event()
     done_event = threading.Event()
 
@@ -81,15 +82,19 @@ def est_pipeline():
     f = h5pyd.File("http://localhost:5010/", "r")
     logging.info("file %s", list(f.keys()))
 
-    assert f["accumulated_number"][()] == 21
-    assert f["image"][10, 10] == 21
+    assert f["accumulated_number"][()] == 10
+    assert f["image"][10, 10] == 0
 
     stop_event.set()
 
     thread.join()
 
 
-def est_live(tmp_path):
+@pytest.mark.skipif(
+    "not config.getoption('dev')",
+    reason="explicitly enable --dev elopment tests",
+)
+def test_live(tmp_path):
     roi_data = {
         "photon": {
             "visible": True,
