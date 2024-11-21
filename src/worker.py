@@ -245,7 +245,7 @@ class CmosWorker:
             means = {}
             for name, sli in rois.items():
                 crop = clean_image.image[sli]
-                scalar = crop.mean()
+                scalar = crop.clip(min=0).mean()
                 means[name] = scalar
             ret.means = means
 
