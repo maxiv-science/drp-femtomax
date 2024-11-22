@@ -1,0 +1,11 @@
+name: pipeline
+channels:
+  - maxiv
+  - conda-forge
+dependencies:
+  - gcc_linux-64
+  - gxx_linux-64
+  - python=3.11
+  - bitshuffle-python
+  - azint
+  - git
