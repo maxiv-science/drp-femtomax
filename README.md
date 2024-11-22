@@ -146,3 +146,15 @@ As iteractions it allows:
 - add/delete/change ROIs
 - set detector position
 - Enable a max filter which enhances small single pixels which otherwise would disappear while rendering.
+
+The viewer without any rois supports plotting q curves, here with a LaB6 sample.
+
+    ModuleViewer -c DrpViewer http://femtomax-pipeline-reducer.daq.maxiv.lu.se
+
+![](data/viewer.png)
+
+To access the ROI over time or motor position with error bars of the standard deviation per step, run
+
+    HsdsViewer http://femtomax-pipeline-reducer.daq.maxiv.lu.se/ "/step_means/ROI 2"
+
+![](data/rois.png)
