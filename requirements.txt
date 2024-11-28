@@ -1,4 +1,4 @@
-dranspose @ git+https://gitlab.maxiv.lu.se/scisw/daq-modules/dranspose@main
+dranspose == 0.1.0
 h5py
 scipy
 h5pyd
