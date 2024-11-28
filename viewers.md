@@ -2,7 +2,7 @@
 
 ## LiveViewer
 This is meant to show you the **raw data** gathered from some detector, live obviously, at a rate of 1 Hz. \
-Example: in a terminal at femtomax type `Liveviewer http://femtomax-zyla-12-daq.daq.maxiv.lu.se` 
+Example: in a terminal at femtomax type `Liveviewer http://femtomax-zyla-12-daq.daq.maxiv.lu.se`
 
 The URL corresponds to the source of the raw data, in this case originating from a zyla-12 camera.
 FemtoMAX have a detailed elogy entry about use and setup of the LiveViewer themselves, found [here](https://elogy.maxiv.lu.se/logbooks/165/entries/32899/?title=Liveviewer&authors=Felix).
@@ -24,14 +24,14 @@ This is also a liveviewer, but of **processed data** rather than of raw data. Th
 This allows for viewing an updated version of the live h5-data from the source URL.
 Some clarification: the source URL containing the data for live output behaves like a (web-)h5 file(*), always updating. The HsdsViewer allows for an updated / animated view of the data stored in the h5-file.
 
-Example: in a terminal at femtomax type `HsdsViewer http://femtomax-pipeline-reducer.daq.maxiv.lu.se/ "/roi_means/ROI_3"` 
+Example: in a terminal at femtomax type `HsdsViewer http://femtomax-pipeline-reducer.daq.maxiv.lu.se/ "/roi_means/ROI_3"`
 
 Shows you the updated / accumulated mean within the user-specified "`ROI_3`", that was created in the ModuleViewer GUI.
 Note the addition of the extra "/" in the end of the URL.
 
 ----
 
-(*): `silx` is the recommended tool used for viewing the data in an h5-file (or in a web-browser that we have convinced is an h5-file). 
+(*): `silx` is the recommended tool used for viewing the data in an h5-file (or in a web-browser that we have convinced is an h5-file).
 If you don't have it installed, it is recommeneded you do so. Use a different terminal than the one from the previous step.
 
 1. Make a dedicated conda environment, e.g., `conda create -n silx_test`, and activate it using `conda activate silx_test`

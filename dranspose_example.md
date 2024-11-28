@@ -1,5 +1,5 @@
 # Example: using dranspose for playing recaptured data
-The goal of this section is to: 
+The goal of this section is to:
 
 - Run dranspose locally on your own machine.
 - View some previously-captured data.
@@ -7,14 +7,14 @@ The goal of this section is to:
 
 Example is done on [femtomax/drp-cmos](https://gitlab.maxiv.lu.se/femtomax/drp-cmos).
 
-## Install dranspose 
+## Install dranspose
 
 1. Make a dedicated conda environment, e.g., `conda create -n dranspose_test`, and activate it using `conda activate dranspose_test`
 2. Install python (`conda install python`) and install dranspose using `pip install git+https://gitlab.maxiv.lu.se/scisw/daq-modules/dranspose.git`
 
 ## Install silx (optional)
 
-`silx` is the recommended tool used for viewing the data in an h5-file (or in a web-browser that we have convinced is an h5-file). 
+`silx` is the recommended tool used for viewing the data in an h5-file (or in a web-browser that we have convinced is an h5-file).
 If you don't have it installed, it is recommeneded you do so. Use a different terminal than the one from the previous step.
 
 1. Make a dedicated conda environment, e.g., `conda create -n silx_test`, and activate it using `conda activate silx_test`
@@ -25,7 +25,7 @@ If you don't have it installed, it is recommeneded you do so. Use a different te
 
 1. Git-clone the [drs-cmos repo](https://gitlab.maxiv.lu.se/femtomax/drp-cmos) locally.
 2. There are some test data in the form of some Balor `.cbors` files present in the `data` folder (one `andor3 ingester` and one `sardana ingester`).
-We are interested in [replaying captured data](https://dranspo.se/tutorials/analysis/#replaying-captured-data). The link reveals the relevant command to be: 
+We are interested in [replaying captured data](https://dranspo.se/tutorials/analysis/#replaying-captured-data). The link reveals the relevant command to be:
 `LOG_LEVEL="DEBUG" dranspose replay -w "src.worker:CmosWorker" -r "src.reducer:CmosReducer" -f data/balor*.cbors --keep-alive --port=5000`
 
 The variables `CmosReducer` and `CmosWorker` are class varible names found in the `reducer.py` and `worker.py` files in the `src` folder of the [drs-cmos repo](https://gitlab.maxiv.lu.se/femtomax/drp-cmos).
