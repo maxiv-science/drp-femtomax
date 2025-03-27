@@ -1,10 +1,17 @@
 import itertools
 import logging
+import pickle
 from typing import Generator
 
 from dranspose.event import InternalWorkerMessage, StreamData
 from dranspose.protocol import EventNumber, StreamName
-from dranspose.data.lecroy import LecroyStart, LecroyData, LecroyEnd
+from dranspose.data.lecroy import (
+    LecroyPrepare,
+    LecroySeqEnd,
+    LecroySeqStart,
+    LecroyData,
+    LecroyEnd,
+)
 import h5py
 from bitshuffle import compress_lz4
 
@@ -18,6 +25,7 @@ class LecroySource:  # Only works with old xes-receiver files
         self.fname = "data/step-00000000.hdf5"
         self.fd = h5py.File(self.fname)
         self.dset = self.fd["/data/waveform1"]
+        self.ts = self.fd["/data/timestamp1"]
 
     def get_source_generators(
         self,
@@ -25,13 +33,10 @@ class LecroySource:  # Only works with old xes-receiver files
         return [self.lecroy_source()]
 
     def lecroy_source(self) -> Generator[InternalWorkerMessage, None, None]:
-        # msg_number = itertools.count(0)
         #
         # 1 b'{"htype": "msg", "what": 1, "frame": 0, "ntriggers": -1, "seqno": 0, "channels": [2, 4]}'
-        lecroy_start = (
-            LecroyStart(
-                htype="msg", what=1, frame=0, ntriggers=-1, seqno=0, channels=[2]
-            )
+        lecroy_prep = (
+            LecroyPrepare(htype="msg", what=0, frame=0)
             .model_dump_json()
             .encode()
         )
@@ -39,16 +44,24 @@ class LecroySource:  # Only works with old xes-receiver files
             event_number=EventNumber(0),
             streams={
                 StreamName("oscc-02-seq-maui"): StreamData(
-                    typ="lecroy", frames=[lecroy_start]
+                    typ="lecroy", frames=[lecroy_prep]
                 )
             },
         )
         logger.debug(f"Sending {start=}")
         yield start
 
+        # 1 b'{"htype": "msg", "what": 1, "frame": 0, "ntriggers": -1, "seqno": 0, "channels": [2, 4]}'
+        lecroy_start = (
+            LecroySeqStart(
+                htype="msg", what=1, frame=0, ntriggers=-1, seqno=0, channels=[2]
+            )
+            .model_dump_json()
+            .encode()
+        )
         # 3 b'{"htype": "traces", "ch": 4, "ts": 1740563619.34, "frame": 33, "shape": [1, 8002], "horiz_offset": -1.0000966451309088e-07, "horiz_interval": 1.25000001668929e-11, "dtype": "float64"}'
         frameno = 0
-        for trace in self.dset:
+        for trace, ts in zip(self.dset, self.ts):
             meta = (
                 LecroyData(
                     htype="traces",
@@ -63,11 +76,16 @@ class LecroySource:  # Only works with old xes-receiver files
                 .model_dump_json()
                 .encode()
             )
+            seq_end = (
+                LecroySeqEnd(htype="msg", what=2, frame=frameno)
+                .model_dump_json()
+                .encode()
+            )
             img = InternalWorkerMessage(
                 event_number=EventNumber(frameno + 1),
                 streams={
                     StreamName("oscc-02-seq-maui"): StreamData(
-                        typ="lecroy", frames=[meta, trace.tobytes()]
+                        typ="lecroy", frames=[lecroy_start, meta, trace.tobytes(), pickle.dumps(ts.tolist()), seq_end]
                     )
                 },
             )
