@@ -6,7 +6,7 @@ from typing import Any
 
 from dranspose.event import ResultData
 from dranspose.data.sardana import SardanaDataDescription, SardanaRecordData
-from dranspose.parameters import StrParameter, BoolParameter
+from dranspose.parameters import StrParameter, BoolParameter, IntParameter
 import os
 import h5py
 import numpy as np
@@ -38,6 +38,11 @@ class CmosReducer:
         params = [
             BoolParameter(name="integrate"),
             BoolParameter(name="pileup"),
+            IntParameter(
+                name="nbins",
+                default=100,
+                description="Number of bins for binning the osc peak positions in bins, determined by the number of bins, nbins",
+            ),
         ]
         return params
 
@@ -68,6 +73,8 @@ class CmosReducer:
         self.publish.update(self.accum.to_dict())
 
         self.publish["sardana"] = {}
+
+        self.publish["osc"] = {}
 
     def _setup_photon_file(self, filename, parameters):
         with self.fh_lock:
@@ -172,6 +179,30 @@ class CmosReducer:
                 self.publish["step_means"][roi]["x"].append(self.movable_positions[pos])
                 last = pos + 1
 
+    def _update_histogram(self, res, parameters=None):
+        if res.osc_peak_pos is not None and res.osc_peak_amps is not None:
+            for osc_ch, osc_pos, osc_amps in zip(
+                res.osc_channels, res.osc_peak_pos, res.osc_peak_amps
+            ):
+                ch_str = "channel_0" + str(osc_ch)
+                if ch_str not in self.publish["osc"]:
+                    self.publish["osc"][ch_str] = {}
+                    self.publish["osc"][ch_str]["pos"] = []
+                    self.publish["osc"][ch_str]["amps"] = []
+                    self.publish["osc"][ch_str]["hist"] = {"x": None, "y": None}
+                    self.publish["osc"][ch_str]["hist_attrs"] = {
+                        "NX_class": "NXdata",
+                        "signal": "y",
+                        "axes": ["x"],
+                    }
+                self.publish["osc"][ch_str]["pos"] += osc_pos
+                self.publish["osc"][ch_str]["amps"] += osc_amps
+                counts, bins = np.histogram(osc_pos, bins=parameters["nbins"].value)
+                self.publish["osc"][ch_str]["hist"]["x"] = bins[
+                    :-1
+                ]  # Right edge of last bin is also part of bins - dim(bins)=dim(counts)+1
+                self.publish["osc"][ch_str]["hist"]["y"] = counts
+
     def process_result(self, result: ResultData, parameters=None):
         res: WorkerResult = result.payload
 
@@ -223,6 +254,8 @@ class CmosReducer:
                     )
 
         self._update_rois(res)
+
+        self._update_histogram(res, parameters)
 
     def finish(self, parameters=None):
         logger.info("finished reducer custom")

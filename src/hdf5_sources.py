@@ -13,6 +13,7 @@ from dranspose.data.lecroy import (
     LecroySeqStart,
     LecroyData,
     LecroyEnd,
+    LECROY_TYPE,
 )
 import h5py
 from bitshuffle import compress_lz4
@@ -28,7 +29,7 @@ class LecroySource:  # Only works with old xes-receiver files
         self.fd = h5py.File(self.fname)
         self.traces = self.fd["/data/waveform1"]
         self.ts = self.fd["/data/timestamp1"]
-        self.stream = StreamName("oscc-02-seq-maui")
+        self.stream = StreamName("oscc_02_maui")
 
     def get_source_generators(
         self,
@@ -43,7 +44,7 @@ class LecroySource:  # Only works with old xes-receiver files
         )
         start = InternalWorkerMessage(
             event_number=EventNumber(0),
-            streams={self.stream: StreamData(typ="lecroy", frames=[lecroy_prep])},
+            streams={self.stream: StreamData(typ=LECROY_TYPE, frames=[lecroy_prep])},
         )
         logger.debug(f"Sending {start=}")
         yield start
@@ -67,8 +68,8 @@ class LecroySource:  # Only works with old xes-receiver files
                     ts=0,
                     frame=frameno,
                     shape=trace.shape,
-                    horiz_offset=0,
-                    horiz_interval=0,
+                    horiz_offset=-1.0000966451309088e-07,
+                    horiz_interval=1.25000001668929e-11,
                     dtype=str(trace.dtype),
                 )
                 .model_dump_json()
@@ -82,7 +83,7 @@ class LecroySource:  # Only works with old xes-receiver files
             frames = [lecroy_start, meta, trace.tobytes(), pickle.dumps([ts]), seq_end]
             img = InternalWorkerMessage(
                 event_number=EventNumber(frameno + 1),
-                streams={self.stream: StreamData(typ="lecroy", frames=frames)},
+                streams={self.stream: StreamData(typ=LECROY_TYPE, frames=frames)},
             )
             yield img
             frameno += 1
@@ -98,7 +99,7 @@ class LecroySource:  # Only works with old xes-receiver files
         )
         end = InternalWorkerMessage(
             event_number=EventNumber(frameno),
-            streams={self.stream: StreamData(typ="lecroy", frames=[lecroy_end])},
+            streams={self.stream: StreamData(typ=LECROY_TYPE, frames=[lecroy_end])},
         )
         logger.debug(f"Sending {end=}")
         yield end
@@ -110,7 +111,7 @@ class LecroySequential:  # Only works with old xes-receiver files
         self.fd = h5py.File(self.fname)
         self.traces = self.fd["/data/waveform1"]
         self.ts = self.fd["/data/timestamp1"]
-        self.stream = StreamName("oscc-02-seq-maui")
+        self.stream = StreamName("oscc_02_maui")
 
     def get_source_generators(
         self,
@@ -125,7 +126,7 @@ class LecroySequential:  # Only works with old xes-receiver files
         )
         start = InternalWorkerMessage(
             event_number=EventNumber(0),
-            streams={self.stream: StreamData(typ="lecroy", frames=[lecroy_prep])},
+            streams={self.stream: StreamData(typ=LECROY_TYPE, frames=[lecroy_prep])},
         )
         logger.debug(f"Sending {start=}")
         yield start
@@ -144,18 +145,18 @@ class LecroySequential:  # Only works with old xes-receiver files
         ts_list = []
         for trace, ts in zip(self.traces, self.ts):
             trace_list.append(trace)
-            ts_list.append(ts)
+            ts_list.append([ts])
             if len(trace_list) % 20 == 0:
                 traces = np.array(trace_list)
                 meta = (
                     LecroyData(
                         htype="traces",
                         ch=2,
-                        ts=0,
+                        ts=ts_list[0][0],
                         frame=frameno,
                         shape=traces.shape,
-                        horiz_offset=0,
-                        horiz_interval=0,
+                        horiz_offset=-1.0000966451309088e-07,
+                        horiz_interval=1.25000001668929e-11,
                         dtype=str(traces.dtype),
                     )
                     .model_dump_json()
@@ -175,7 +176,7 @@ class LecroySequential:  # Only works with old xes-receiver files
                 ]
                 img = InternalWorkerMessage(
                     event_number=EventNumber(frameno + 1),
-                    streams={self.stream: StreamData(typ="lecroy", frames=frames)},
+                    streams={self.stream: StreamData(typ=LECROY_TYPE, frames=frames)},
                 )
                 yield img
                 trace_list = []
@@ -193,7 +194,7 @@ class LecroySequential:  # Only works with old xes-receiver files
         )
         end = InternalWorkerMessage(
             event_number=EventNumber(frameno),
-            streams={self.stream: StreamData(typ="lecroy", frames=[lecroy_end])},
+            streams={self.stream: StreamData(typ=LECROY_TYPE, frames=[lecroy_end])},
         )
         logger.debug(f"Sending {end=}")
         yield end

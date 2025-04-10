@@ -22,7 +22,7 @@ class Result:
 class LecroyWorker:
     def __init__(self, *args: tuple[Any], **kwargs: dict[str, Any]) -> None:
         logger.info("LecroyWorker init")
-        self.osc_stream = StreamName("oscc-02-seq-maui")
+        self.osc_stream = StreamName("oscc_02_maui")
 
     @staticmethod
     def describe_parameters() -> list[IntParameter]:
