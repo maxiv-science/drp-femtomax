@@ -93,6 +93,7 @@ class WorkerResult(BaseModel):
         list[float]
     ] | None = None  # Channel[peaks] (don't care about trace number)
     osc_peak_amps: list[list[float]] | None = None  # Channel[peaks]
+    osc_ntraces: list[int] | None = None  # Per worker - number of traces per channel
 
 
 class TooManyPhotons(Exception):
@@ -271,6 +272,7 @@ class CmosWorker:
                 ret.osc_channels = osc.channels
                 ret.osc_peak_pos = []
                 ret.osc_peak_amps = []
+                ret.osc_ntraces = []
 
                 for ch_traces, ch_meta in zip(osc.data, osc.meta):
                     allpos = []
@@ -288,8 +290,11 @@ class CmosWorker:
                         )
                         allpos += peaks
                         allamps += amps
-                    ret.osc_peak_pos.append(allpos)
+                    ret.osc_peak_pos.append(
+                        allpos
+                    )  # Peak positions of all traces from a single worker, per channel
                     ret.osc_peak_amps.append(allamps)
+                    ret.osc_ntraces.append(len(ch_traces))
 
         if clean_image is not None:
             ret.image = clean_image

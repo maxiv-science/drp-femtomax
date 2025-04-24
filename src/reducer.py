@@ -186,22 +186,31 @@ class CmosReducer:
 
     def _update_histogram(self, res, parameters=None):
         if res.osc_peak_pos is not None and res.osc_peak_amps is not None:
-            for osc_ch, osc_pos, osc_amps in zip(
-                res.osc_channels, res.osc_peak_pos, res.osc_peak_amps
+            for osc_ch, osc_pos, osc_amps, osc_ntraces in zip(
+                res.osc_channels, res.osc_peak_pos, res.osc_peak_amps, res.osc_ntraces
             ):
                 ch_str = "channel_0" + str(osc_ch)
                 if ch_str not in self.publish["osc"]:
                     self.publish["osc"][ch_str] = {}
                     self.publish["osc"][ch_str]["pos"] = []
                     self.publish["osc"][ch_str]["amps"] = []
-                    self.publish["osc"][ch_str]["hist"] = {"x": None, "y": None}
+                    self.publish["osc"][ch_str]["hist"] = {
+                        "x": None,
+                        "y": np.zeros(parameters["nbins"].value),
+                    }
                     self.publish["osc"][ch_str]["hist_attrs"] = {
                         "NX_class": "NXdata",
                         "axes": ["x"],
                         "signal": "y",
                     }
-                    # self.publish["osc"][ch_str]["count_sample"] = parameters["samplesize"].value * [None]
-                    # self.publish["osc"][ch_str]["count_sample"] = [] # TODO: unique index per trace necessary?
+                    self.publish["osc"][ch_str][
+                        "count_sample"
+                    ] = (
+                        []
+                    )  # BUG: the "last" 100 traces are not chronologically last. Just the last 100 given by some random workers that happened to be faster
+                    # BUG: doesn't really need to be published, but we need a global variable that remembers the results from previous workers
+                    self.publish["osc"][ch_str]["ave_npeak_per_trace"] = []
+                    self.publish["osc"][ch_str]["true_samplesize"] = []
                 self.publish["osc"][ch_str]["pos"] += osc_pos
                 self.publish["osc"][ch_str]["amps"] += osc_amps
                 counts, bin_edges = np.histogram(
@@ -210,15 +219,31 @@ class CmosReducer:
                 self.publish["osc"][ch_str]["hist"]["x"] = (
                     bin_edges[:-1] + np.diff(bin_edges) / 2.0
                 )  # Bin centers
-                self.publish["osc"][ch_str]["hist"]["y"] = counts
+                self.publish["osc"][ch_str]["hist"]["y"] += counts
 
-                # self.publish["osc"][ch_str]["count_sample"] += counts # BUG: This is counts over multiple traces already
-                # size_sample = len( self.publish["osc"][ch_str]["count_sample"] )
-                # if( size_sample >= parameters["samplesize"].value ):
-                #     overflow = size_sample - parameters["samplesize"].value + 1
-                #     for i in range(overflow):
-                #         _ = self.publish["osc"][ch_str]["count_sample"].pop(i)
-                # count_avg = np.mean(self.publish["osc"][ch_str]["count_sample"])
+                count_ave_singleworker = sum(counts) / osc_ntraces
+                self.publish["osc"][ch_str]["count_sample"] += [
+                    count_ave_singleworker
+                ] * osc_ntraces
+
+                count_ave = np.mean(
+                    self.publish["osc"][ch_str]["count_sample"][
+                        -parameters["samplesize"].value :
+                    ]
+                )
+                if (
+                    len(self.publish["osc"][ch_str]["count_sample"])
+                    >= 2 * parameters["samplesize"].value
+                ):
+                    self.publish["osc"][ch_str]["count_sample"] = self.publish["osc"][
+                        ch_str
+                    ]["count_sample"][-parameters["samplesize"].value :]
+                true_size = min(
+                    len(self.publish["osc"][ch_str]["count_sample"]),
+                    parameters["samplesize"].value,
+                )
+                self.publish["osc"][ch_str]["ave_npeak_per_trace"].append(count_ave)
+                self.publish["osc"][ch_str]["true_samplesize"].append(true_size)
 
     def process_result(self, result: ResultData, parameters=None):
         res: WorkerResult = result.payload
