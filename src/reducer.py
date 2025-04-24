@@ -43,6 +43,11 @@ class CmosReducer:
                 default=100,
                 description="Number of bins for binning the osc peak positions in bins, determined by the number of bins, nbins",
             ),
+            IntParameter(
+                name="samplesize",
+                default=100,
+                description="The average number of osc peaks per trace is calculated using the last N=samplesize traces",
+            ),
         ]
         return params
 
@@ -192,16 +197,28 @@ class CmosReducer:
                     self.publish["osc"][ch_str]["hist"] = {"x": None, "y": None}
                     self.publish["osc"][ch_str]["hist_attrs"] = {
                         "NX_class": "NXdata",
-                        "signal": "y",
                         "axes": ["x"],
+                        "signal": "y",
                     }
+                    # self.publish["osc"][ch_str]["count_sample"] = parameters["samplesize"].value * [None]
+                    # self.publish["osc"][ch_str]["count_sample"] = [] # TODO: unique index per trace necessary?
                 self.publish["osc"][ch_str]["pos"] += osc_pos
                 self.publish["osc"][ch_str]["amps"] += osc_amps
-                counts, bins = np.histogram(osc_pos, bins=parameters["nbins"].value)
-                self.publish["osc"][ch_str]["hist"]["x"] = bins[
-                    :-1
-                ]  # Right edge of last bin is also part of bins - dim(bins)=dim(counts)+1
+                counts, bin_edges = np.histogram(
+                    osc_pos, bins=parameters["nbins"].value
+                )
+                self.publish["osc"][ch_str]["hist"]["x"] = (
+                    bin_edges[:-1] + np.diff(bin_edges) / 2.0
+                )  # Bin centers
                 self.publish["osc"][ch_str]["hist"]["y"] = counts
+
+                # self.publish["osc"][ch_str]["count_sample"] += counts # BUG: This is counts over multiple traces already
+                # size_sample = len( self.publish["osc"][ch_str]["count_sample"] )
+                # if( size_sample >= parameters["samplesize"].value ):
+                #     overflow = size_sample - parameters["samplesize"].value + 1
+                #     for i in range(overflow):
+                #         _ = self.publish["osc"][ch_str]["count_sample"].pop(i)
+                # count_avg = np.mean(self.publish["osc"][ch_str]["count_sample"])
 
     def process_result(self, result: ResultData, parameters=None):
         res: WorkerResult = result.payload
