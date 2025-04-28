@@ -214,7 +214,6 @@ class CmosReducer:
                     ] = (
                         []
                     )  # BUG: the "last" N traces are not chronologically last, but the last N given by some random workers that happened to be faster
-
                 self.publish["osc"][ch_str]["pos"] += osc_pos
                 self.publish["osc"][ch_str]["amps"] += osc_amps
                 counts, bin_edges = np.histogram(
