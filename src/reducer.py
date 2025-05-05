@@ -189,8 +189,12 @@ class CmosReducer:
     def _update_histogram(self, res, parameters=None):
         if res.osc_peak_pos is not None and res.osc_peak_amps is not None:
             samplesize = parameters["samplesize"].value
-            for osc_ch, osc_pos, osc_amps, osc_ntraces in zip(
-                res.osc_channels, res.osc_peak_pos, res.osc_peak_amps, res.osc_ntraces
+            for osc_ch, osc_pos, osc_amps, osc_ntraces, osc_t_range in zip(
+                res.osc_channels,
+                res.osc_peak_pos,
+                res.osc_peak_amps,
+                res.osc_ntraces,
+                res.osc_t_range,
             ):
                 ch_str = "channel_0" + str(osc_ch)
                 if ch_str not in self.publish["osc"]:
@@ -217,7 +221,7 @@ class CmosReducer:
                 self.publish["osc"][ch_str]["pos"] += osc_pos
                 self.publish["osc"][ch_str]["amps"] += osc_amps
                 counts, bin_edges = np.histogram(
-                    osc_pos, bins=parameters["nbins"].value
+                    osc_pos, bins=parameters["nbins"].value, range=osc_t_range
                 )
                 self.publish["osc"][ch_str]["hist"]["x"] = (
                     bin_edges[:-1] + np.diff(bin_edges) / 2.0
