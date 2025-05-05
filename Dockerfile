@@ -1,20 +1,18 @@
-FROM harbor.maxiv.lu.se/daq/conda-build:latest AS build
+FROM ghcr.io/mamba-org/micromamba:latest AS build
 
 COPY conda-env.yaml /tmp/env.yaml
 
-RUN mamba env create -f /tmp/env.yaml  && \
-    conda-pack -n pipeline -o /tmp/env.tar && \
-    mkdir /venv && cd /venv && tar xf /tmp/env.tar && \
-    rm /tmp/env.tar && \
-    /venv/bin/conda-unpack
+RUN micromamba install --copy -y -n base -f /tmp/env.yaml && \
+  rm -rf /opt/conda/pkgs
+# Check list of packages installed
+RUN micromamba list -n base
 
 FROM harbor.maxiv.lu.se/dockerhub/library/ubuntu:latest AS runtime
-ENV PATH /venv/bin:$PATH
-COPY --from=build /venv /venv
 
-ENV HDF5_PLUGIN_PATH /venv/lib/hdf5/plugin
+COPY --from=build /opt/conda /opt/conda
 
-RUN apt-get update && apt-get install -y build-essential
+ENV PATH /opt/conda/bin:$PATH
+ENV HDF5_PLUGIN_PATH /opt/conda/lib/hdf5/plugin
 
 ARG CI_COMMIT_SHA=0000
 ARG CI_COMMIT_REF_NAME=none
@@ -22,10 +20,6 @@ ARG CI_COMMIT_TIMESTAMP=0
 ARG CI_PROJECT_URL=none
 
 WORKDIR /tmp
-
-COPY requirements.txt /tmp/requirements.txt
-
-RUN python -m pip --no-cache-dir install -r requirements.txt
 
 COPY src /tmp/src
 COPY <<EOF /etc/build_git_meta.json
