@@ -3,21 +3,13 @@ import os
 import tempfile
 import json
 from dataclasses import dataclass
-from .peak_finding import findPeaks
 
 from dranspose.event import EventData
-from dranspose.parameters import (
-    IntParameter,
-    StrParameter,
-    BoolParameter,
-    FloatParameter,
-)
+from dranspose.parameters import IntParameter, StrParameter, BoolParameter
 from dranspose.middlewares.stream1 import parse
 from dranspose.middlewares.sardana import parse as sardana_parse
-from dranspose.middlewares.lecroy import parse as lecroy_parse
 from dranspose.data.stream1 import Stream1Data, Stream1Start, Stream1End
 from dranspose.data.sardana import SardanaDataDescription
-from dranspose.data.lecroy import LecroyParsed
 import numpy as np
 from numpy import unravel_index
 from pydantic import BaseModel, ConfigDict
@@ -88,12 +80,6 @@ class WorkerResult(BaseModel):
     photon_xye: list[tuple[float, float, float]] = []
     photon_e_max: float | None = None
     frame_no: int | None = None
-    osc_channels: list[int] | None = None
-    osc_peak_pos: list[
-        list[float]
-    ] | None = None  # Channel[peaks] (don't care about trace number)
-    osc_peak_amps: list[list[float]] | None = None  # Channel[peaks]
-    osc_ntraces: list[int] | None = None  # Per worker - number of traces per channel
 
 
 class TooManyPhotons(Exception):
@@ -124,20 +110,7 @@ class CmosWorker:
                 default=1100,
                 description="discard every spot with a total energy below that",
             ),
-            StrParameter(
-                name="rois",
-                default="{}",
-            ),
-            FloatParameter(
-                name="threshold_low",
-                default=0.006,
-                description="Potential peaks of (-1)*osc data have a value above this (needed for parabolic fitting of peaks)",
-            ),
-            FloatParameter(
-                name="threshold_high",
-                default=0.035,
-                description="Parabolic fit values for peaks of (-1)*osc data above this value are discarded",
-            ),
+            StrParameter(name="rois", default="{}"),
         ]
         return params
 
@@ -265,36 +238,6 @@ class CmosWorker:
                     pixel_size=6.5e-6,
                 )
                 ret.frame_no = data.frame
-
-        if "oscc_02_maui" in event.streams:
-            osc = lecroy_parse(event.streams["oscc_02_maui"])
-            if isinstance(osc, LecroyParsed):
-                ret.osc_channels = osc.channels
-                ret.osc_peak_pos = []
-                ret.osc_peak_amps = []
-                ret.osc_ntraces = []
-
-                for ch_traces, ch_meta in zip(osc.data, osc.meta):
-                    allpos = []
-                    allamps = []
-                    time_base = (
-                        np.arange(ch_traces.shape[-1]) * ch_meta.horiz_interval
-                        + ch_meta.horiz_offset
-                    )
-                    for trace in ch_traces:
-                        peaks, amps, _, _ = findPeaks(
-                            parameters["threshold_low"].value,
-                            parameters["threshold_high"].value,
-                            (-1.0) * trace,
-                            time_base,
-                        )
-                        allpos += peaks
-                        allamps += amps
-                    ret.osc_peak_pos.append(
-                        allpos
-                    )  # Peak positions of all traces from a single worker, per channel
-                    ret.osc_peak_amps.append(allamps)
-                    ret.osc_ntraces.append(len(ch_traces))
 
         if clean_image is not None:
             ret.image = clean_image

@@ -1,5 +1,5 @@
-dranspose == 0.1.1
+dranspose @ git+https://gitlab.maxiv.lu.se/scisw/daq-modules/dranspose@main
 h5py
 scipy
-h5pyd == 0.21.0 # The pin can be removed when dranspose is updated
-# setuptools # remove once new h5pyd is released: https://github.com/HDFGroup/h5pyd/pull/184
+h5pyd
+setuptools # remove once new h5pyd is released: https://github.com/HDFGroup/h5pyd/pull/184
