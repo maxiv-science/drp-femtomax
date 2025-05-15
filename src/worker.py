@@ -94,9 +94,6 @@ class WorkerResult(BaseModel):
     ] | None = None  # Channel[peaks] (don't care about trace number)
     osc_peak_amps: list[list[float]] | None = None  # Channel[peaks]
     osc_ntraces: list[int] | None = None  # Per worker - number of traces per channel
-    osc_t_range: list[
-        list[float]
-    ] | None = None  # Per channel - time range endpoints of oscilloscope
 
 
 class TooManyPhotons(Exception):
@@ -276,7 +273,6 @@ class CmosWorker:
                 ret.osc_peak_pos = []
                 ret.osc_peak_amps = []
                 ret.osc_ntraces = []
-                ret.osc_t_range = []
 
                 for ch_traces, ch_meta in zip(osc.data, osc.meta):
                     allpos = []
@@ -285,7 +281,6 @@ class CmosWorker:
                         np.arange(ch_traces.shape[-1]) * ch_meta.horiz_interval
                         + ch_meta.horiz_offset
                     )
-                    ret.osc_t_range.append([time_base[0], time_base[-1]])
                     for trace in ch_traces:
                         peaks, amps, _, _ = findPeaks(
                             parameters["threshold_low"].value,
