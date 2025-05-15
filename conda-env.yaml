@@ -1,11 +1,26 @@
 name: pipeline
 channels:
-  - maxiv
   - conda-forge
+  - maxiv
 dependencies:
-  - gcc_linux-64
-  - gxx_linux-64
   - python=3.11
+  - pip
   - bitshuffle-python
   - azint
-  - git
+  - h5py
+  - scipy
+  - h5pyd
+  # dranspose dependencies
+  - pyzmq
+  - redis-py
+  - hiredis
+  - fastapi
+  - uvicorn
+  - numpy
+  - pydantic
+  - pydantic-settings
+  - jsonpath-ng
+  - cbor2
+  - pip:
+    - redis-logs  # soon on conda-forge
+    - dranspose==0.1.1
